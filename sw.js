@@ -3,7 +3,7 @@
  * Les appels à l'API GitHub (api.github.com) ne sont JAMAIS mis en cache :
  * ils passent toujours par le réseau (données fraîches + token).
  */
-var CACHE = 'journal-hse-v1';
+var CACHE = 'journal-hse-v2';
 var SHELL = [
   './',
   './index.html',
@@ -30,17 +30,15 @@ self.addEventListener('fetch', function (e) {
   // Tout ce qui n'est pas notre origine (ex. api.github.com) : réseau direct.
   if (url.origin !== self.location.origin) return;
   if (e.request.method !== 'GET') return;
-  // App shell : cache d'abord, réseau en secours (et on rafraîchit le cache).
+  // App shell : réseau d'abord (dernière version quand on est en ligne, et on
+  // rafraîchit le cache), cache en secours (fonctionnement hors-ligne).
   e.respondWith(
-    caches.match(e.request).then(function (cached) {
-      var net = fetch(e.request).then(function (resp) {
-        if (resp && resp.status === 200) {
-          var copy = resp.clone();
-          caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
-        }
-        return resp;
-      }).catch(function () { return cached; });
-      return cached || net;
-    })
+    fetch(e.request).then(function (resp) {
+      if (resp && resp.status === 200) {
+        var copy = resp.clone();
+        caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+      }
+      return resp;
+    }).catch(function () { return caches.match(e.request); })
   );
 });
