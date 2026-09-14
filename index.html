@@ -197,6 +197,7 @@
     /* --------------------------------------------------------------- Panels */
     .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow-sm)}
     .save-bar{margin-top:18px;display:flex;gap:12px;justify-content:flex-end;align-items:flex-end;flex-wrap:wrap}
+    .save-hint{font-size:.76rem;color:var(--muted);margin-right:auto;align-self:center;display:inline-flex;align-items:center;gap:6px}
     .check{font-size:.8rem;color:var(--muted);display:inline-flex;gap:7px;align-items:center;cursor:pointer;user-select:none}
     .check input{width:16px;height:16px;accent-color:var(--accent)}
 
@@ -271,8 +272,9 @@
       <div id="backlogStatus" class="status-line"></div>
       <div id="backlogCols" class="cols"></div>
       <div class="save-bar">
+        <div class="save-hint">✓ Enregistrement automatique sur GitHub après chaque modification</div>
         <div class="field"><label>Branche (écriture)</label><input id="writeBranch" value="main" style="width:150px"></div>
-        <button class="btn dark" id="btnSaveBacklog">💾 Enregistrer le backlog</button>
+        <button class="btn dark" id="btnSaveBacklog">💾 Enregistrer maintenant</button>
       </div>
     </section>
 

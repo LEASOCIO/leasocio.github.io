@@ -153,18 +153,38 @@ function cardHtml(a) {
 
 function findAction(id) { return (BACKLOG.actions || []).filter(function (a) { return a.id === id; })[0]; }
 
-function saveBacklog() {
+// Enregistrement automatique (anti-rebond) : chaque action du backlog est
+// poussée sur GitHub sans clic manuel. Les clics rapides sont regroupés.
+var _saveTimer = null, _saving = false, _dirtyAgain = false;
+
+function scheduleAutoSave() {
+  if (!CFG.token) { setStatus('backlogStatus', '⚠️ Connectez un token GitHub (⚙️) pour enregistrer.'); return; }
+  setStatus('backlogStatus', '✎ Modification non enregistrée…');
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(function () { _saveTimer = null; pushBacklog(true); }, 1000);
+}
+
+function pushBacklog(auto) {
+  if (!CFG.token) { setStatus('backlogStatus', '⚠️ Token GitHub requis (⚙️).'); return Promise.resolve(); }
+  if (_saving) { _dirtyAgain = true; return Promise.resolve(); }
+  _saving = true;
   var branch = $('writeBranch').value.trim() || 'main';
-  setStatus('backlogStatus', '<span class="spin"></span> Envoi vers GitHub…');
+  setStatus('backlogStatus', '<span class="spin"></span> Enregistrement…');
   BACKLOG.updated = new Date().toISOString();
   var pretty = JSON.stringify(BACKLOG, null, 2);
-  ghPutContent(CFG.journalRepo, BACKLOG_PATH, pretty, 'Journal: mise à jour du backlog (' + CFG.today + ')', BACKLOG_SHA, branch)
+  return ghPutContent(CFG.journalRepo, BACKLOG_PATH, pretty, 'Journal: mise à jour du backlog (' + CFG.today + ')', BACKLOG_SHA, branch)
     .then(function (r) {
       BACKLOG_SHA = r.content ? r.content.sha : BACKLOG_SHA;
-      setStatus('backlogStatus', '✅ Backlog poussé sur <b>' + esc(branch) + '</b>.');
-      toast('Backlog enregistré sur GitHub');
-    }).catch(function (e) { setStatus('backlogStatus', '❌ ' + e.message); });
+      var t = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      setStatus('backlogStatus', '✅ Enregistré sur <b>' + esc(branch) + '</b> à ' + t);
+      if (!auto) toast('Backlog enregistré sur GitHub');
+    })
+    .catch(function (e) { setStatus('backlogStatus', '❌ Échec de l\'enregistrement : ' + esc(e.message) + ' — vos changements restent en local, réessayez.'); })
+    .then(function () { _saving = false; if (_dirtyAgain) { _dirtyAgain = false; scheduleAutoSave(); } });
 }
+
+// Bouton manuel « Enregistrer le backlog » : force un envoi immédiat.
+function saveBacklog() { if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; } return pushBacklog(false); }
 
 // ------------------------------- Action modal -----------------------------
 function fillRepoSelect() {
@@ -195,7 +215,8 @@ function saveAction() {
   }
   $('actionModal').classList.remove('open');
   renderBacklog();
-  toast('Action enregistrée localement — pensez à « Enregistrer le backlog ».');
+  scheduleAutoSave();
+  toast('Action enregistrée');
 }
 
 // ------------------------------- Commits (soir) ---------------------------
@@ -401,8 +422,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var b = e.target.closest('button[data-act]'); if (!b) return;
     var id = b.getAttribute('data-id'), act = b.getAttribute('data-act');
     if (act === 'edit') openActionModal(id);
-    else if (act === 'del') { if (confirm('Supprimer cette action ?')) { BACKLOG.actions = BACKLOG.actions.filter(function (a) { return a.id !== id; }); renderBacklog(); } }
-    else if (act === 'cycle') { var a = findAction(id); if (a) { a.statut = b.getAttribute('data-next'); a.date_faite = a.statut === 'fait' ? CFG.today : ''; renderBacklog(); } }
+    else if (act === 'del') { if (confirm('Supprimer cette action ?')) { BACKLOG.actions = BACKLOG.actions.filter(function (a) { return a.id !== id; }); renderBacklog(); scheduleAutoSave(); } }
+    else if (act === 'cycle') { var a = findAction(id); if (a) { a.statut = b.getAttribute('data-next'); a.date_faite = a.statut === 'fait' ? CFG.today : ''; renderBacklog(); scheduleAutoSave(); } }
   });
 
   // Délégation : dépliage des commits
