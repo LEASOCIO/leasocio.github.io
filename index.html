@@ -229,6 +229,26 @@
     .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle}
     @keyframes sp{to{transform:rotate(360deg)}}
 
+    /* Récaps (lecture) */
+    .recaps-layout{display:grid;grid-template-columns:minmax(170px,230px) 1fr;gap:16px;margin-top:16px;align-items:start}
+    .recaps-list{display:flex;flex-direction:column;gap:8px}
+    .recap-item{display:flex;align-items:center;gap:8px;justify-content:space-between;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 13px;cursor:pointer;font-family:inherit;color:var(--text);transition:.15s;box-shadow:var(--shadow-sm)}
+    .recap-item:hover{border-color:var(--accent);transform:translateY(-1px)}
+    .recap-item.active{border-color:var(--accent);box-shadow:var(--ring)}
+    .recap-item .d{font-weight:700;font-size:.9rem}
+    .recap-item .w{font-size:.72rem;color:var(--muted);text-transform:capitalize}
+    .recap-view{min-height:220px}
+    .md{line-height:1.62;color:var(--text)}
+    .md h1{font-size:1.28rem;margin:.1em 0 .5em}
+    .md h2{font-size:1.04rem;margin:1.1em 0 .45em;border-bottom:1px solid var(--line);padding-bottom:5px}
+    .md h3{font-size:.92rem;margin:.9em 0 .3em;color:var(--accent)}
+    .md ul{margin:.35em 0 .85em;padding-left:1.25em}
+    .md li{margin:.22em 0}
+    .md p{margin:.5em 0}
+    .md strong{color:var(--text);font-weight:700}
+    .md em{color:var(--muted);font-style:normal}
+    .md code{font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;font-size:.82em;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+    @media (max-width:640px){.recaps-layout{grid-template-columns:1fr}.recap-item{justify-content:flex-start;gap:10px}}
     .app-foot{text-align:center;color:var(--muted-2);font-size:.72rem;margin-top:32px;padding-top:16px;border-top:1px solid var(--line)}
     .app-foot code{font-family:ui-monospace,Menlo,monospace;font-size:.7rem}
 
@@ -252,6 +272,7 @@
     <div class="toggle">
       <button id="tabMatin" class="active" data-view="matin">☀️ Matin</button>
       <button id="tabSoir" data-view="soir">🌙 Soir</button>
+      <button id="tabRecaps" data-view="recaps">📖 Récaps</button>
     </div>
     <button class="icon-btn" id="btnTheme" title="Thème clair / sombre" aria-label="Basculer le thème">🌗</button>
     <button class="icon-btn" id="btnSettings" title="Configuration" aria-label="Configuration">⚙️</button>
@@ -306,6 +327,21 @@
           <div class="field"><label>Branche</label><input id="soirBranch" value="main" style="width:130px"></div>
           <button class="btn dark" id="btnPushRecap">🚀 Pousser le récap</button>
         </div>
+      </div>
+    </section>
+
+    <section id="view-recaps" class="view">
+      <div class="section-head">
+        <div>
+          <h2>Journal des récaps</h2>
+          <div class="lead">Relis les récaps du soir déjà poussés — ce qui a été fait, jour par jour.</div>
+        </div>
+        <div class="row"><button class="btn ghost" id="btnLoadRecaps">🔄 Rafraîchir</button></div>
+      </div>
+      <div id="recapsStatus" class="status-line"></div>
+      <div class="recaps-layout">
+        <div id="recapsList" class="recaps-list"></div>
+        <div id="recapView" class="recap-view panel"><div class="empty">Choisis une journée à gauche pour lire son récap.</div></div>
       </div>
     </section>
 

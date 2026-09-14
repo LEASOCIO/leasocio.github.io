@@ -359,7 +359,77 @@ function pushRecap() {
   }).then(function () {
     setStatus('commitsStatus', '✅ Récap poussé : journal/' + date + '.md' + (withBacklog ? ' + backlog' : ''));
     toast('Récap du soir poussé sur GitHub 🚀');
+    _recapsLoaded = false; // forcer le rechargement de la liste des récaps
   }).catch(function (e) { setStatus('commitsStatus', '❌ ' + e.message); });
+}
+
+// ------------------------------- Récaps (lecture) -------------------------
+// Le matin : relire les récaps du soir déjà poussés (journal/AAAA-MM-JJ.md).
+var RECAP_FILES = [], _recapsLoaded = false;
+
+function loadRecaps() {
+  setStatus('recapsStatus', '<span class="spin"></span> Chargement des récaps…');
+  $('recapView').innerHTML = '';
+  gh('GET', '/repos/' + CFG.owner + '/' + CFG.journalRepo + '/contents/journal').then(function (res) {
+    if (res.code === 404) { $('recapsList').innerHTML = ''; setStatus('recapsStatus', 'ℹ️ Aucun dossier journal/ pour l\'instant.'); return; }
+    if (res.code !== 200 || !res.json || !res.json.length) { $('recapsList').innerHTML = ''; setStatus('recapsStatus', 'ℹ️ Aucun récap pour l\'instant.'); return; }
+    var files = res.json.filter(function (f) { return f.type === 'file' && /^\d{4}-\d{2}-\d{2}\.md$/.test(f.name); });
+    files.sort(function (a, b) { return b.name.localeCompare(a.name); });
+    RECAP_FILES = files;
+    if (!files.length) { $('recapsList').innerHTML = ''; setStatus('recapsStatus', 'ℹ️ Aucun récap poussé pour l\'instant.'); $('recapView').innerHTML = '<div class="empty">Les récaps du soir apparaîtront ici.</div>'; return; }
+    setStatus('recapsStatus', files.length + ' récap(s) — du ' + files[files.length - 1].name.slice(0, 10) + ' au ' + files[0].name.slice(0, 10));
+    renderRecapsList();
+    openRecap(files[0].name); // ouvrir le dernier récap automatiquement
+  }).catch(function (e) { setStatus('recapsStatus', '❌ ' + e.message); });
+}
+
+function frDateParts(iso) {
+  var d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return { full: iso, w: '' };
+  return { full: d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }), w: d.toLocaleDateString('fr-FR', { weekday: 'long' }) };
+}
+
+function renderRecapsList() {
+  $('recapsList').innerHTML = RECAP_FILES.map(function (f) {
+    var p = frDateParts(f.name.slice(0, 10));
+    return '<button class="recap-item" data-name="' + esc(f.name) + '"><span class="d">' + esc(p.full) + '</span><span class="w">' + esc(p.w) + '</span></button>';
+  }).join('');
+}
+
+function openRecap(name) {
+  Array.prototype.forEach.call(document.querySelectorAll('.recap-item'), function (el) {
+    el.classList.toggle('active', el.getAttribute('data-name') === name);
+  });
+  $('recapView').innerHTML = '<div class="empty"><span class="spin"></span> Chargement…</div>';
+  ghGetContent(CFG.journalRepo, 'journal/' + name, null).then(function (file) {
+    if (!file) { $('recapView').innerHTML = '<div class="empty">Récap introuvable.</div>'; return; }
+    $('recapView').innerHTML = '<div class="md">' + mdToHtml(file.content) + '</div>';
+  }).catch(function (e) { $('recapView').innerHTML = '<div class="empty">❌ ' + esc(e.message) + '</div>'; });
+}
+
+// Mini-rendu Markdown (sous-ensemble produit par l'appli : titres, listes,
+// gras, italique, code inline). Aucune dépendance externe.
+function mdToHtml(md) {
+  var lines = (md || '').replace(/\r/g, '').split('\n'), out = [], inList = false;
+  function inline(s) {
+    s = esc(s);
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/_([^_]+)_/g, '<em>$1</em>');
+    return s;
+  }
+  function closeList() { if (inList) { out.push('</ul>'); inList = false; } }
+  lines.forEach(function (line) {
+    var m;
+    if (/^\s*$/.test(line)) { closeList(); return; }
+    if ((m = line.match(/^###\s+(.*)/))) { closeList(); out.push('<h3>' + inline(m[1]) + '</h3>'); }
+    else if ((m = line.match(/^##\s+(.*)/))) { closeList(); out.push('<h2>' + inline(m[1]) + '</h2>'); }
+    else if ((m = line.match(/^#\s+(.*)/))) { closeList(); out.push('<h1>' + inline(m[1]) + '</h1>'); }
+    else if ((m = line.match(/^\s*[-*]\s+(.*)/))) { if (!inList) { out.push('<ul>'); inList = true; } out.push('<li>' + inline(m[1]) + '</li>'); }
+    else { closeList(); out.push('<p>' + inline(line) + '</p>'); }
+  });
+  closeList();
+  return out.join('');
 }
 
 // ------------------------------- Settings ---------------------------------
@@ -393,10 +463,11 @@ function testToken() {
 
 // ------------------------------- UI wiring --------------------------------
 function showView(v) {
-  $('view-matin').classList.toggle('active', v === 'matin');
-  $('view-soir').classList.toggle('active', v === 'soir');
-  $('tabMatin').classList.toggle('active', v === 'matin');
-  $('tabSoir').classList.toggle('active', v === 'soir');
+  ['matin', 'soir', 'recaps'].forEach(function (name) {
+    var sec = $('view-' + name); if (sec) sec.classList.toggle('active', name === v);
+    var tab = $('tab' + name.charAt(0).toUpperCase() + name.slice(1)); if (tab) tab.classList.toggle('active', name === v);
+  });
+  if (v === 'recaps' && !_recapsLoaded && CFG.token) { _recapsLoaded = true; loadRecaps(); }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -405,6 +476,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
   $('tabMatin').addEventListener('click', function () { showView('matin'); });
   $('tabSoir').addEventListener('click', function () { showView('soir'); });
+  $('tabRecaps').addEventListener('click', function () { showView('recaps'); });
+  $('btnLoadRecaps').addEventListener('click', function () { _recapsLoaded = true; loadRecaps(); });
+  $('recapsList').addEventListener('click', function (e) {
+    var b = e.target.closest('.recap-item'); if (!b) return;
+    openRecap(b.getAttribute('data-name'));
+  });
   $('btnSettings').addEventListener('click', openSettings);
   $('btnCloseSettings').addEventListener('click', function () { $('settingsModal').classList.remove('open'); });
   $('btnSaveSettings').addEventListener('click', saveSettings);
