@@ -127,7 +127,7 @@ function renderBacklog() {
   ];
   var html = '';
   defs.forEach(function (d) {
-    html += '<div class="col"><h2>' + d.label + ' <span class="pill ' + d.cls + '">' + groups[d.key].length + '</span></h2>';
+    html += '<div class="col c-' + d.cls + '"><h2>' + d.label + ' <span class="pill ' + d.cls + '">' + groups[d.key].length + '</span></h2>';
     if (!groups[d.key].length) html += '<div class="empty">—</div>';
     groups[d.key].forEach(function (a) { html += cardHtml(a); });
     html += '</div>';

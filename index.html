@@ -11,87 +11,257 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Journal HSE">
   <style>
+    /* ---------------------------------------------------------------- Tokens */
     :root{
-      --primary:#00205b; --accent:#2f6fed; --bg:#f5f7fa; --card:#ffffff;
-      --line:#e3e8ef; --muted:#64748b; --ok:#15803d; --wip:#b45309; --todo:#475569;
-      --ok-bg:#dcfce7; --wip-bg:#fef3c7; --todo-bg:#e2e8f0;
+      --primary:#00205b; --primary-2:#0a327f; --accent:#2f6fed; --accent-2:#1d5fe0;
+      --bg:#eef2f8; --bg-2:#e6ecf5; --surface:#ffffff; --surface-2:#f6f8fc;
+      --line:#e3e8ef; --line-2:#d3dbe8;
+      --text:#0f172a; --muted:#64748b; --muted-2:#94a3b8;
+      --ok:#15803d; --ok-bg:#dcfce7; --wip:#b45309; --wip-bg:#fef3c7; --todo:#475569; --todo-bg:#e5e9f0;
+      --danger:#b91c1c;
+      --radius:14px; --radius-sm:9px; --radius-xs:7px;
+      --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+      --shadow:0 4px 16px -6px rgba(15,23,42,.14);
+      --shadow-lg:0 24px 60px -20px rgba(15,23,42,.35);
+      --header:linear-gradient(120deg,#00205b 0%,#0a327f 55%,#123f9c 100%);
+      --ring:0 0 0 3px rgba(47,111,237,.35);
     }
+    :root[data-theme="dark"]{
+      --bg:#0b1220; --bg-2:#0e1626; --surface:#141d30; --surface-2:#101a2c;
+      --line:#25324c; --line-2:#31415f;
+      --text:#e7edf7; --muted:#9fb0c9; --muted-2:#6b7c99;
+      --ok:#4ade80; --ok-bg:#123024; --wip:#fbbf24; --wip-bg:#3a2c0c; --todo:#aab8cc; --todo-bg:#1e2942;
+      --danger:#f87171;
+      --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+      --shadow:0 6px 20px -8px rgba(0,0,0,.6);
+      --shadow-lg:0 24px 60px -20px rgba(0,0,0,.75);
+      --header:linear-gradient(120deg,#071634 0%,#0a2a63 55%,#0e336f 100%);
+      --ring:0 0 0 3px rgba(80,140,255,.4);
+    }
+    @media (prefers-color-scheme:dark){
+      :root:not([data-theme="light"]){
+        --bg:#0b1220; --bg-2:#0e1626; --surface:#141d30; --surface-2:#101a2c;
+        --line:#25324c; --line-2:#31415f;
+        --text:#e7edf7; --muted:#9fb0c9; --muted-2:#6b7c99;
+        --ok:#4ade80; --ok-bg:#123024; --wip:#fbbf24; --wip-bg:#3a2c0c; --todo:#aab8cc; --todo-bg:#1e2942;
+        --danger:#f87171;
+        --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+        --shadow:0 6px 20px -8px rgba(0,0,0,.6);
+        --shadow-lg:0 24px 60px -20px rgba(0,0,0,.75);
+        --header:linear-gradient(120deg,#071634 0%,#0a2a63 55%,#0e336f 100%);
+        --ring:0 0 0 3px rgba(80,140,255,.4);
+      }
+    }
+
+    /* --------------------------------------------------------------- Base */
     *{box-sizing:border-box}
-    body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:#0f172a;-webkit-text-size-adjust:100%}
-    header{background:var(--primary);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 18px 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:20}
-    header h1{font-size:1.05rem;margin:0;font-weight:700}
-    header .sub{font-size:.68rem;opacity:.7}
+    html{-webkit-text-size-adjust:100%}
+    body{
+      margin:0;color:var(--text);
+      background:
+        radial-gradient(1200px 500px at 100% -10%,rgba(47,111,237,.10),transparent 60%),
+        radial-gradient(900px 500px at -10% 0%,rgba(0,32,91,.08),transparent 55%),
+        var(--bg);
+      font-family:'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
+      line-height:1.5;min-height:100vh;
+    }
+    h1,h2,h3{line-height:1.25}
+    ::selection{background:rgba(47,111,237,.25)}
+    a{color:var(--accent)}
+
+    /* --------------------------------------------------------------- Header */
+    header{
+      background:var(--header);color:#fff;
+      padding:calc(12px + env(safe-area-inset-top)) clamp(14px,4vw,26px) 13px;
+      display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+      position:sticky;top:0;z-index:20;
+      box-shadow:0 6px 24px -12px rgba(0,16,54,.7);
+    }
+    .brand{display:flex;align-items:center;gap:11px;min-width:0}
+    .brand .logo{
+      width:38px;height:38px;flex:none;border-radius:11px;display:grid;place-items:center;
+      font-size:1.15rem;background:rgba(255,255,255,.14);
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);backdrop-filter:blur(4px);
+    }
+    .brand h1{font-size:1.06rem;margin:0;font-weight:700;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .brand .sub{font-size:.68rem;opacity:.72;letter-spacing:.3px;text-transform:uppercase;font-weight:600}
     .spacer{flex:1}
-    .toggle{display:inline-flex;background:rgba(255,255,255,.12);border-radius:10px;padding:3px}
-    .toggle button{background:none;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.83rem;opacity:.7}
-    .toggle button.active{background:#fff;color:var(--primary);opacity:1}
-    .icon-btn{background:rgba(255,255,255,.12);border:none;color:#fff;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:1rem}
-    main{max-width:1100px;margin:0 auto;padding:18px 16px calc(28px + env(safe-area-inset-bottom))}
-    .view{display:none} .view.active{display:block}
-    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+    .toggle{display:inline-flex;background:rgba(255,255,255,.13);border-radius:11px;padding:4px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+    .toggle button{
+      background:none;border:none;color:#fff;padding:7px 15px;border-radius:8px;cursor:pointer;
+      font-weight:600;font-size:.83rem;opacity:.72;transition:.18s;white-space:nowrap;font-family:inherit;
+    }
+    .toggle button:hover{opacity:1}
+    .toggle button.active{background:#fff;color:var(--primary);opacity:1;box-shadow:var(--shadow-sm)}
+    .icon-btn{
+      background:rgba(255,255,255,.13);border:none;color:#fff;width:38px;height:38px;flex:none;
+      border-radius:10px;cursor:pointer;font-size:1rem;transition:.18s;
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);display:grid;place-items:center;
+    }
+    .icon-btn:hover{background:rgba(255,255,255,.24)}
+    .icon-btn:active{transform:scale(.94)}
+
+    /* --------------------------------------------------------------- Layout */
+    main{max-width:1120px;margin:0 auto;padding:clamp(16px,3vw,24px) clamp(14px,3vw,20px) calc(40px + env(safe-area-inset-bottom))}
+    .view{display:none;animation:fade .32s ease} .view.active{display:block}
+    @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+    .section-head{display:flex;gap:12px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;margin-bottom:4px}
+    .section-head h2{margin:0;font-size:1.12rem;color:var(--text);font-weight:700}
+    .section-head .lead{font-size:.82rem;color:var(--muted);margin-top:2px}
+
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
     .field{display:flex;flex-direction:column;gap:5px}
-    .field label{font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--muted)}
-    input,select,textarea{font-family:inherit;font-size:16px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:inherit}
-    textarea{width:100%;min-height:130px;resize:vertical}
-    .btn{background:var(--accent);color:#fff;border:none;padding:10px 15px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.88rem}
-    .btn.dark{background:var(--primary)} .btn.ghost{background:#fff;color:var(--primary);border:1px solid var(--line)}
-    .btn:disabled{opacity:.5}
-    .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:16px}
-    .col h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
-    .pill{font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:20px}
+    .field label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+    input,select,textarea{
+      font-family:inherit;font-size:16px;padding:9px 12px;border:1px solid var(--line-2);
+      border-radius:var(--radius-sm);background:var(--surface);color:var(--text);transition:border-color .15s,box-shadow .15s;
+    }
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+    input::placeholder,textarea::placeholder{color:var(--muted-2)}
+    textarea{width:100%;min-height:150px;resize:vertical;line-height:1.55}
+
+    /* --------------------------------------------------------------- Buttons */
+    .btn{
+      background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:var(--radius-sm);
+      cursor:pointer;font-weight:600;font-size:.88rem;font-family:inherit;transition:.16s;
+      box-shadow:0 2px 8px -2px rgba(47,111,237,.5);display:inline-flex;align-items:center;gap:6px;
+    }
+    .btn:hover{background:var(--accent-2);transform:translateY(-1px)}
+    .btn:active{transform:translateY(0)}
+    .btn.dark{background:var(--primary);box-shadow:0 2px 8px -2px rgba(0,32,91,.5)}
+    .btn.dark:hover{background:var(--primary-2)}
+    .btn.ghost{background:var(--surface);color:var(--accent);border:1px solid var(--line-2);box-shadow:var(--shadow-sm)}
+    .btn.ghost:hover{border-color:var(--accent);background:var(--surface-2)}
+    .btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+    .btn:focus-visible,.icon-btn:focus-visible,.toggle button:focus-visible,.mini:focus-visible{outline:none;box-shadow:var(--ring)}
+
+    /* --------------------------------------------------------------- Kanban */
+    .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:18px}
+    .col{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:14px 13px 6px}
+    .col h2{
+      font-size:.74rem;text-transform:uppercase;letter-spacing:.6px;margin:0 0 12px;
+      display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:800;
+    }
+    .col h2::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--todo)}
+    .col.c-wip h2::before{background:var(--wip)} .col.c-fait h2::before{background:var(--ok)}
+    .pill{font-size:.66rem;font-weight:800;padding:2px 9px;border-radius:20px;margin-left:auto}
     .pill.todo{background:var(--todo-bg);color:var(--todo)} .pill.wip{background:var(--wip-bg);color:var(--wip)} .pill.fait{background:var(--ok-bg);color:var(--ok)}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
-    .card .title{font-weight:600;font-size:.92rem;margin-bottom:6px}
-    .card .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.74rem;color:var(--muted)}
-    .repo-tag{background:#eef2ff;color:#3730a3;font-weight:700;padding:2px 7px;border-radius:6px;font-size:.72rem}
-    .card .notes{font-size:.82rem;color:#475569;margin-top:6px;white-space:pre-wrap}
-    .card-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
-    .mini{font-size:.74rem;padding:5px 9px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer;color:#334155}
-    .commit{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden}
-    .commit-head{display:flex;gap:10px;align-items:center;padding:10px 12px;cursor:pointer}
-    .sha{font-family:ui-monospace,Menlo,monospace;font-size:.74rem;background:#f1f5f9;padding:2px 6px;border-radius:5px;color:#334155}
-    .commit-msg{flex:1;font-size:.88rem;font-weight:600}
-    .commit-sub{font-size:.72rem;color:var(--muted)}
-    .branch-chip{font-size:.64rem;background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc;padding:1px 6px;border-radius:10px}
-    .diff{padding:0 12px 12px;border-top:1px dashed var(--line);display:none} .diff.open{display:block}
-    .diff table{width:100%;border-collapse:collapse;font-size:.8rem}
-    .diff td{padding:4px 6px;border-bottom:1px solid #f1f5f9}
-    .add{color:var(--ok);font-weight:700} .del{color:#b91c1c;font-weight:700}
-    .fname{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;word-break:break-all}
-    .repo-group{margin-bottom:18px}
-    .repo-group h3{font-size:.85rem;margin:0 0 8px;color:var(--primary);display:flex;gap:8px;align-items:center}
-    .count-badge{background:var(--primary);color:#fff;border-radius:20px;font-size:.7rem;padding:1px 8px}
-    .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
-    .modal-bg.open{display:flex}
-    .modal{background:#fff;border-radius:14px;max-width:520px;width:100%;padding:22px;max-height:90vh;overflow:auto}
-    .modal h2{margin:0 0 4px;color:var(--primary);font-size:1.1rem}
-    .modal p{margin:0 0 16px;font-size:.8rem;color:var(--muted)}
-    .modal .field{margin-bottom:12px} .modal .field input,.modal .field select,.modal .field textarea{width:100%}
-    .status-line{font-size:.82rem;margin-top:8px;min-height:18px}
-    .empty{color:var(--muted);font-size:.85rem;font-style:italic;padding:8px 2px}
-    .toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;padding:12px 20px;border-radius:10px;font-size:.86rem;opacity:0;transition:.3s;pointer-events:none;z-index:60;max-width:90%}
-    .toast.show{opacity:1}
-    .spin{display:inline-block;width:14px;height:14px;border:2px solid #cbd5e1;border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle}
+
+    .card{
+      background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);
+      padding:12px 14px 12px 16px;margin-bottom:10px;position:relative;overflow:hidden;
+      box-shadow:var(--shadow-sm);transition:box-shadow .18s,transform .18s,border-color .18s;
+    }
+    .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--todo);opacity:.85}
+    .col.c-wip .card::before{background:var(--wip)} .col.c-fait .card::before{background:var(--ok)}
+    .card:hover{box-shadow:var(--shadow);transform:translateY(-1px);border-color:var(--line-2)}
+    .card .title{font-weight:650;font-size:.94rem;margin-bottom:7px;color:var(--text)}
+    .card .meta{display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-size:.73rem;color:var(--muted)}
+    .repo-tag{background:rgba(47,111,237,.12);color:var(--accent);font-weight:700;padding:2px 8px;border-radius:6px;font-size:.71rem;letter-spacing:.2px}
+    .card .notes{font-size:.82rem;color:var(--muted);margin-top:7px;white-space:pre-wrap;line-height:1.5}
+    .card-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+    .mini{
+      font-size:.74rem;padding:5px 10px;border-radius:var(--radius-xs);border:1px solid var(--line-2);
+      background:var(--surface);cursor:pointer;color:var(--muted);font-family:inherit;font-weight:600;transition:.15s;
+    }
+    .mini:hover{border-color:var(--accent);color:var(--accent);background:var(--surface-2)}
+
+    /* --------------------------------------------------------------- Commits */
+    .repo-group{margin-bottom:20px}
+    .repo-group h3{font-size:.86rem;margin:0 0 10px;color:var(--text);display:flex;gap:8px;align-items:center;font-weight:700}
+    .count-badge{background:var(--primary);color:#fff;border-radius:20px;font-size:.68rem;padding:2px 9px;font-weight:700}
+    :root[data-theme="dark"] .count-badge{background:var(--accent)}
+    @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .count-badge{background:var(--accent)}}
+    .commit{
+      background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);
+      margin-bottom:9px;overflow:hidden;box-shadow:var(--shadow-sm);transition:border-color .16s,box-shadow .16s;
+    }
+    .commit:hover{border-color:var(--line-2);box-shadow:var(--shadow)}
+    .commit-head{display:flex;gap:11px;align-items:center;padding:11px 13px;cursor:pointer}
+    .sha{font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;font-size:.73rem;background:var(--surface-2);padding:3px 7px;border-radius:6px;color:var(--muted);border:1px solid var(--line);flex:none}
+    .commit-msg{flex:1;font-size:.88rem;font-weight:600;color:var(--text)}
+    .commit-sub{font-size:.72rem;color:var(--muted);margin-top:2px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .branch-chip{font-size:.63rem;background:rgba(14,116,144,.12);color:#0e7490;border:1px solid rgba(14,116,144,.28);padding:1px 7px;border-radius:10px;font-weight:600}
+    :root[data-theme="dark"] .branch-chip{color:#67e8f9}
+    @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .branch-chip{color:#67e8f9}}
+    .chev{color:var(--muted-2);transition:transform .2s;flex:none}
+    .commit:has(.diff.open) .chev{transform:rotate(180deg)}
+    .diff{padding:0 13px 13px;border-top:1px dashed var(--line);display:none} .diff.open{display:block}
+    .diff table{width:100%;border-collapse:collapse;font-size:.8rem;margin-top:10px}
+    .diff td{padding:5px 6px;border-bottom:1px solid var(--line)}
+    .diff tr:last-child td{border-bottom:none}
+    .add{color:var(--ok);font-weight:700} .del{color:var(--danger);font-weight:700}
+    .fname{font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;font-size:.76rem;word-break:break-all;color:var(--text)}
+
+    /* --------------------------------------------------------------- Panels */
+    .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow-sm)}
+    .save-bar{margin-top:18px;display:flex;gap:12px;justify-content:flex-end;align-items:flex-end;flex-wrap:wrap}
+    .check{font-size:.8rem;color:var(--muted);display:inline-flex;gap:7px;align-items:center;cursor:pointer;user-select:none}
+    .check input{width:16px;height:16px;accent-color:var(--accent)}
+
+    /* --------------------------------------------------------------- Status/empty */
+    .status-line{font-size:.82rem;margin-top:10px;min-height:18px;color:var(--muted)}
+    .status-line b{color:var(--text)}
+    .empty{color:var(--muted-2);font-size:.85rem;font-style:italic;padding:10px 2px;text-align:center}
+
+    /* --------------------------------------------------------------- Modals */
+    .modal-bg{position:fixed;inset:0;background:rgba(7,15,32,.55);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+    .modal-bg.open{display:flex;animation:fade .22s ease}
+    .modal{
+      background:var(--surface);border:1px solid var(--line);border-radius:18px;max-width:520px;width:100%;
+      padding:24px;max-height:90vh;overflow:auto;box-shadow:var(--shadow-lg);animation:pop .26s cubic-bezier(.2,.8,.25,1);
+    }
+    @keyframes pop{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+    .modal h2{margin:0 0 5px;color:var(--text);font-size:1.14rem;font-weight:700}
+    .modal p{margin:0 0 18px;font-size:.8rem;color:var(--muted);line-height:1.55}
+    .modal .field{margin-bottom:13px} .modal .field input,.modal .field select,.modal .field textarea{width:100%}
+    .modal .row{margin-top:6px}
+
+    /* --------------------------------------------------------------- Toast + spinner */
+    .toast{
+      position:fixed;bottom:calc(22px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(12px);
+      background:var(--primary);color:#fff;padding:12px 20px;border-radius:12px;font-size:.86rem;font-weight:500;
+      opacity:0;transition:.32s;pointer-events:none;z-index:60;max-width:90%;box-shadow:var(--shadow-lg);
+    }
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle}
     @keyframes sp{to{transform:rotate(360deg)}}
+
+    .app-foot{text-align:center;color:var(--muted-2);font-size:.72rem;margin-top:32px;padding-top:16px;border-top:1px solid var(--line)}
+    .app-foot code{font-family:ui-monospace,Menlo,monospace;font-size:.7rem}
+
+    @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+    @media (max-width:520px){
+      .brand .sub{display:none}
+      .section-head{align-items:flex-start}
+    }
   </style>
 </head>
 <body>
   <header>
-    <div><h1>📓 Journal de Dev HSE</h1><div class="sub">Suivi via GitHub</div></div>
+    <div class="brand">
+      <div class="logo">📓</div>
+      <div>
+        <h1>Journal de Dev HSE</h1>
+        <div class="sub">Suivi via GitHub</div>
+      </div>
+    </div>
     <div class="spacer"></div>
     <div class="toggle">
       <button id="tabMatin" class="active" data-view="matin">☀️ Matin</button>
       <button id="tabSoir" data-view="soir">🌙 Soir</button>
     </div>
-    <button class="icon-btn" id="btnSettings" title="Configuration">⚙️</button>
+    <button class="icon-btn" id="btnTheme" title="Thème clair / sombre" aria-label="Basculer le thème">🌗</button>
+    <button class="icon-btn" id="btnSettings" title="Configuration" aria-label="Configuration">⚙️</button>
   </header>
 
   <main>
     <section id="view-matin" class="view active">
-      <div class="row" style="justify-content:space-between">
+      <div class="section-head">
         <div>
-          <h2 style="margin:0;font-size:1.02rem;color:var(--primary)">Backlog du jour</h2>
-          <div style="font-size:.8rem;color:var(--muted)">Prévu, en cours, fait.</div>
+          <h2>Backlog du jour</h2>
+          <div class="lead">Ce qui est prévu, en cours, et fait.</div>
         </div>
         <div class="row">
           <button class="btn ghost" id="btnRefresh">🔄 Rafraîchir</button>
@@ -100,30 +270,46 @@
       </div>
       <div id="backlogStatus" class="status-line"></div>
       <div id="backlogCols" class="cols"></div>
-      <div class="row" style="margin-top:18px;justify-content:flex-end;align-items:center">
+      <div class="save-bar">
         <div class="field"><label>Branche (écriture)</label><input id="writeBranch" value="main" style="width:150px"></div>
         <button class="btn dark" id="btnSaveBacklog">💾 Enregistrer le backlog</button>
       </div>
     </section>
 
     <section id="view-soir" class="view">
-      <div class="row">
-        <div class="field"><label>Journée</label><input type="date" id="soirDate"></div>
-        <button class="btn" id="btnLoadCommits">📥 Charger les commits</button>
+      <div class="section-head">
+        <div>
+          <h2>Récap du soir</h2>
+          <div class="lead">Les commits du jour, leurs diffs, puis le push du récap.</div>
+        </div>
       </div>
-      <div id="commitsStatus" class="status-line"></div>
-      <div id="commitsWrap"></div>
+      <div class="panel" style="margin-top:14px">
+        <div class="row">
+          <div class="field"><label>Journée</label><input type="date" id="soirDate"></div>
+          <button class="btn" id="btnLoadCommits">📥 Charger les commits</button>
+        </div>
+        <div id="commitsStatus" class="status-line"></div>
+      </div>
+      <div id="commitsWrap" style="margin-top:16px"></div>
       <div id="recapBlock" style="display:none;margin-top:22px">
-        <h2 style="font-size:1rem;color:var(--primary);margin-bottom:6px">Récap du soir</h2>
-        <div style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Généré depuis les commits + le backlog. Modifiable avant le push.</div>
-        <textarea id="recapText"></textarea>
-        <div class="row" style="margin-top:12px;justify-content:flex-end;align-items:center">
-          <label style="font-size:.8rem;color:var(--muted)"><input type="checkbox" id="recapWithBacklog" checked> pousser aussi le backlog</label>
+        <div class="section-head">
+          <div>
+            <h2 style="font-size:1rem">Récap généré</h2>
+            <div class="lead">Depuis les commits + le backlog. Modifiable avant le push.</div>
+          </div>
+        </div>
+        <textarea id="recapText" style="margin-top:10px"></textarea>
+        <div class="save-bar">
+          <label class="check"><input type="checkbox" id="recapWithBacklog" checked> pousser aussi le backlog</label>
           <div class="field"><label>Branche</label><input id="soirBranch" value="main" style="width:130px"></div>
           <button class="btn dark" id="btnPushRecap">🚀 Pousser le récap</button>
         </div>
       </div>
     </section>
+
+    <div class="app-foot">
+      📓 Journal de Dev HSE — outils HSE Méaulte · le token reste sur l'appareil, envoyé seulement à <code>api.github.com</code>
+    </div>
   </main>
 
   <div id="settingsModal" class="modal-bg">
@@ -155,7 +341,7 @@
           <select id="actStatut"><option value="a_faire">À faire</option><option value="en_cours">En cours</option><option value="fait">Fait</option></select>
         </div>
       </div>
-      <div class="field"><label>Notes</label><textarea id="actNotes" style="min-height:70px"></textarea></div>
+      <div class="field"><label>Notes</label><textarea id="actNotes" style="min-height:80px"></textarea></div>
       <div class="row" style="justify-content:flex-end;margin-top:6px">
         <button class="btn ghost" id="btnCloseAction">Annuler</button>
         <button class="btn dark" id="btnSaveAction">Valider</button>
@@ -164,6 +350,31 @@
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <script>
+    /* Thème clair/sombre — persistant, sans dépendance (avant app.js) */
+    (function () {
+      var KEY = 'ui_theme';
+      function get(){ try { return localStorage.getItem(KEY); } catch (e) { return null; } }
+      function set(v){ try { localStorage.setItem(KEY, v); } catch (e) {} }
+      var saved = get();
+      if (saved === 'dark' || saved === 'light') document.documentElement.setAttribute('data-theme', saved);
+      document.addEventListener('DOMContentLoaded', function () {
+        var btn = document.getElementById('btnTheme');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          var isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+            || (!document.documentElement.getAttribute('data-theme')
+                && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var next = isDark ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          set(next);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', next === 'dark' ? '#071634' : '#00205b');
+        });
+      });
+    })();
+  </script>
   <script src="app.js"></script>
 </body>
 </html>
