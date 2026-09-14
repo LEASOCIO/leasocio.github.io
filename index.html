@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Journal de Dev HSE</title>
+  <meta name="theme-color" content="#00205b">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Journal HSE">
+  <style>
+    :root{
+      --primary:#00205b; --accent:#2f6fed; --bg:#f5f7fa; --card:#ffffff;
+      --line:#e3e8ef; --muted:#64748b; --ok:#15803d; --wip:#b45309; --todo:#475569;
+      --ok-bg:#dcfce7; --wip-bg:#fef3c7; --todo-bg:#e2e8f0;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:#0f172a;-webkit-text-size-adjust:100%}
+    header{background:var(--primary);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 18px 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:20}
+    header h1{font-size:1.05rem;margin:0;font-weight:700}
+    header .sub{font-size:.68rem;opacity:.7}
+    .spacer{flex:1}
+    .toggle{display:inline-flex;background:rgba(255,255,255,.12);border-radius:10px;padding:3px}
+    .toggle button{background:none;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.83rem;opacity:.7}
+    .toggle button.active{background:#fff;color:var(--primary);opacity:1}
+    .icon-btn{background:rgba(255,255,255,.12);border:none;color:#fff;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:1rem}
+    main{max-width:1100px;margin:0 auto;padding:18px 16px calc(28px + env(safe-area-inset-bottom))}
+    .view{display:none} .view.active{display:block}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+    .field{display:flex;flex-direction:column;gap:5px}
+    .field label{font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--muted)}
+    input,select,textarea{font-family:inherit;font-size:16px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:inherit}
+    textarea{width:100%;min-height:130px;resize:vertical}
+    .btn{background:var(--accent);color:#fff;border:none;padding:10px 15px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.88rem}
+    .btn.dark{background:var(--primary)} .btn.ghost{background:#fff;color:var(--primary);border:1px solid var(--line)}
+    .btn:disabled{opacity:.5}
+    .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:16px}
+    .col h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+    .pill{font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:20px}
+    .pill.todo{background:var(--todo-bg);color:var(--todo)} .pill.wip{background:var(--wip-bg);color:var(--wip)} .pill.fait{background:var(--ok-bg);color:var(--ok)}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+    .card .title{font-weight:600;font-size:.92rem;margin-bottom:6px}
+    .card .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.74rem;color:var(--muted)}
+    .repo-tag{background:#eef2ff;color:#3730a3;font-weight:700;padding:2px 7px;border-radius:6px;font-size:.72rem}
+    .card .notes{font-size:.82rem;color:#475569;margin-top:6px;white-space:pre-wrap}
+    .card-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+    .mini{font-size:.74rem;padding:5px 9px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer;color:#334155}
+    .commit{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden}
+    .commit-head{display:flex;gap:10px;align-items:center;padding:10px 12px;cursor:pointer}
+    .sha{font-family:ui-monospace,Menlo,monospace;font-size:.74rem;background:#f1f5f9;padding:2px 6px;border-radius:5px;color:#334155}
+    .commit-msg{flex:1;font-size:.88rem;font-weight:600}
+    .commit-sub{font-size:.72rem;color:var(--muted)}
+    .branch-chip{font-size:.64rem;background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc;padding:1px 6px;border-radius:10px}
+    .diff{padding:0 12px 12px;border-top:1px dashed var(--line);display:none} .diff.open{display:block}
+    .diff table{width:100%;border-collapse:collapse;font-size:.8rem}
+    .diff td{padding:4px 6px;border-bottom:1px solid #f1f5f9}
+    .add{color:var(--ok);font-weight:700} .del{color:#b91c1c;font-weight:700}
+    .fname{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;word-break:break-all}
+    .repo-group{margin-bottom:18px}
+    .repo-group h3{font-size:.85rem;margin:0 0 8px;color:var(--primary);display:flex;gap:8px;align-items:center}
+    .count-badge{background:var(--primary);color:#fff;border-radius:20px;font-size:.7rem;padding:1px 8px}
+    .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+    .modal-bg.open{display:flex}
+    .modal{background:#fff;border-radius:14px;max-width:520px;width:100%;padding:22px;max-height:90vh;overflow:auto}
+    .modal h2{margin:0 0 4px;color:var(--primary);font-size:1.1rem}
+    .modal p{margin:0 0 16px;font-size:.8rem;color:var(--muted)}
+    .modal .field{margin-bottom:12px} .modal .field input,.modal .field select,.modal .field textarea{width:100%}
+    .status-line{font-size:.82rem;margin-top:8px;min-height:18px}
+    .empty{color:var(--muted);font-size:.85rem;font-style:italic;padding:8px 2px}
+    .toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;padding:12px 20px;border-radius:10px;font-size:.86rem;opacity:0;transition:.3s;pointer-events:none;z-index:60;max-width:90%}
+    .toast.show{opacity:1}
+    .spin{display:inline-block;width:14px;height:14px;border:2px solid #cbd5e1;border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle}
+    @keyframes sp{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>📓 Journal de Dev HSE</h1><div class="sub">Suivi via GitHub</div></div>
+    <div class="spacer"></div>
+    <div class="toggle">
+      <button id="tabMatin" class="active" data-view="matin">☀️ Matin</button>
+      <button id="tabSoir" data-view="soir">🌙 Soir</button>
+    </div>
+    <button class="icon-btn" id="btnSettings" title="Configuration">⚙️</button>
+  </header>
+
+  <main>
+    <section id="view-matin" class="view active">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <h2 style="margin:0;font-size:1.02rem;color:var(--primary)">Backlog du jour</h2>
+          <div style="font-size:.8rem;color:var(--muted)">Prévu, en cours, fait.</div>
+        </div>
+        <div class="row">
+          <button class="btn ghost" id="btnRefresh">🔄 Rafraîchir</button>
+          <button class="btn" id="btnNewAction">＋ Action</button>
+        </div>
+      </div>
+      <div id="backlogStatus" class="status-line"></div>
+      <div id="backlogCols" class="cols"></div>
+      <div class="row" style="margin-top:18px;justify-content:flex-end;align-items:center">
+        <div class="field"><label>Branche (écriture)</label><input id="writeBranch" value="main" style="width:150px"></div>
+        <button class="btn dark" id="btnSaveBacklog">💾 Enregistrer le backlog</button>
+      </div>
+    </section>
+
+    <section id="view-soir" class="view">
+      <div class="row">
+        <div class="field"><label>Journée</label><input type="date" id="soirDate"></div>
+        <button class="btn" id="btnLoadCommits">📥 Charger les commits</button>
+      </div>
+      <div id="commitsStatus" class="status-line"></div>
+      <div id="commitsWrap"></div>
+      <div id="recapBlock" style="display:none;margin-top:22px">
+        <h2 style="font-size:1rem;color:var(--primary);margin-bottom:6px">Récap du soir</h2>
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Généré depuis les commits + le backlog. Modifiable avant le push.</div>
+        <textarea id="recapText"></textarea>
+        <div class="row" style="margin-top:12px;justify-content:flex-end;align-items:center">
+          <label style="font-size:.8rem;color:var(--muted)"><input type="checkbox" id="recapWithBacklog" checked> pousser aussi le backlog</label>
+          <div class="field"><label>Branche</label><input id="soirBranch" value="main" style="width:130px"></div>
+          <button class="btn dark" id="btnPushRecap">🚀 Pousser le récap</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="settingsModal" class="modal-bg">
+    <div class="modal">
+      <h2>⚙️ Configuration GitHub</h2>
+      <p>Le token (PAT) reste sur cet appareil (localStorage), il n'est jamais envoyé ailleurs qu'à GitHub.</p>
+      <div class="field"><label>Token GitHub (PAT)</label><input id="cfgToken" type="password" placeholder="(laisser vide pour conserver l'actuel)"></div>
+      <div class="field"><label>Propriétaire (owner)</label><input id="cfgOwner" placeholder="leasocio"></div>
+      <div class="field"><label>Repos suivis (virgules)</label><input id="cfgRepos" placeholder="S,BD,ACC,..."></div>
+      <div class="field"><label>Repo du journal</label><input id="cfgJournal" placeholder="todolist"></div>
+      <div id="cfgStatus" class="status-line"></div>
+      <div class="row" style="justify-content:flex-end;margin-top:8px">
+        <button class="btn ghost" id="btnCloseSettings">Fermer</button>
+        <button class="btn ghost" id="btnTestToken">🔌 Tester</button>
+        <button class="btn dark" id="btnSaveSettings">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="actionModal" class="modal-bg">
+    <div class="modal">
+      <h2 id="actionModalTitle">＋ Nouvelle action</h2>
+      <p>Une action = une tâche du backlog, rattachée à un outil.</p>
+      <input type="hidden" id="actId">
+      <div class="field"><label>Titre</label><input id="actTitre" placeholder="Ex : VS — mail de délégation"></div>
+      <div class="row">
+        <div class="field" style="flex:1"><label>Outil / repo</label><select id="actRepo"></select></div>
+        <div class="field" style="flex:1"><label>Statut</label>
+          <select id="actStatut"><option value="a_faire">À faire</option><option value="en_cours">En cours</option><option value="fait">Fait</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="actNotes" style="min-height:70px"></textarea></div>
+      <div class="row" style="justify-content:flex-end;margin-top:6px">
+        <button class="btn ghost" id="btnCloseAction">Annuler</button>
+        <button class="btn dark" id="btnSaveAction">Valider</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
