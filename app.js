@@ -118,11 +118,12 @@ function loadBacklog() {
 }
 
 function renderBacklog() {
-  var groups = { en_cours: [], a_faire: [], fait: [] };
+  var groups = { en_cours: [], a_faire: [], committe: [], fait: [] };
   (BACKLOG.actions || []).forEach(function (a) { (groups[a.statut] || groups.a_faire).push(a); });
   var defs = [
     { key: 'en_cours', label: 'En cours', cls: 'wip' },
     { key: 'a_faire', label: 'À faire', cls: 'todo' },
+    { key: 'committe', label: 'Committé', cls: 'committe' },
     { key: 'fait', label: 'Fait', cls: 'fait' }
   ];
   var html = '';
@@ -137,8 +138,10 @@ function renderBacklog() {
 
 function cardHtml(a) {
   var commits = (a.commits && a.commits.length) ? '<span title="commits liés">🔗 ' + a.commits.length + '</span>' : '';
-  var next = a.statut === 'a_faire' ? 'en_cours' : (a.statut === 'en_cours' ? 'fait' : 'a_faire');
-  var nextLbl = next === 'en_cours' ? '▶ Démarrer' : (next === 'fait' ? '✔ Terminer' : '↺ Rouvrir');
+  var cycle = { a_faire: 'en_cours', en_cours: 'committe', committe: 'fait', fait: 'a_faire' };
+  var next = cycle[a.statut] || 'en_cours';
+  var lblByNext = { en_cours: '▶ Démarrer', committe: '✓ Committé', fait: '✔ Terminer', a_faire: '↺ Rouvrir' };
+  var nextLbl = lblByNext[next] || '▶';
   return '<div class="card">'
     + '<div class="title">' + esc(a.titre) + '</div>'
     + '<div class="meta"><span class="repo-tag">' + esc(a.repo || '?') + '</span>'
@@ -206,12 +209,14 @@ function saveAction() {
   if (!titre) { toast('Titre requis'); return; }
   var repo = $('actRepo').value, statut = $('actStatut').value, notes = $('actNotes').value.trim();
   if (id) {
+    var done = (statut === 'fait' || statut === 'committe');
     var a = findAction(id); a.titre = titre; a.repo = repo; a.statut = statut; a.notes = notes;
-    if (statut === 'fait' && !a.date_faite) a.date_faite = CFG.today;
-    if (statut !== 'fait') a.date_faite = '';
+    if (done && !a.date_faite) a.date_faite = CFG.today;
+    if (!done) a.date_faite = '';
   } else {
+    var done2 = (statut === 'fait' || statut === 'committe');
     BACKLOG.actions.push({ id: 'a' + Date.now().toString(36), titre: titre, repo: repo, statut: statut, notes: notes,
-      date_prevue: CFG.today, date_faite: statut === 'fait' ? CFG.today : '', commits: [] });
+      date_prevue: CFG.today, date_faite: done2 ? CFG.today : '', commits: [] });
   }
   $('actionModal').classList.remove('open');
   renderBacklog();
@@ -220,14 +225,41 @@ function saveAction() {
 }
 
 // ------------------------------- Commits (soir) ---------------------------
-var COMMITS = [], DIFF_LOADED = {};
+var COMMITS = [], DIFF_LOADED = {}, SOIR = null;
+
+// Numéro de semaine ISO (+ année ISO) d'une date.
+function isoWeek(d) {
+  var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  var day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day);
+  var ys = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  var wk = Math.ceil((((t - ys) / 86400000) + 1) / 7);
+  return { year: t.getUTCFullYear(), week: wk };
+}
+
+// Plage à charger selon le mode (jour vs semaine) : bornes, libellé, nom de
+// fichier du récap et titre markdown.
+function soirRange() {
+  var date = $('soirDate').value;
+  var mode = ($('soirMode') && $('soirMode').value) || 'jour';
+  if (mode === 'semaine') {
+    var d = new Date(date + 'T00:00:00');
+    var dow = d.getDay() || 7; // lundi = 1
+    var start = new Date(d); start.setDate(d.getDate() - (dow - 1)); start.setHours(0, 0, 0, 0);
+    var end = new Date(start); end.setDate(start.getDate() + 7); // borne exclusive
+    var iw = isoWeek(start), ws = String(iw.week).padStart(2, '0');
+    return { mode: mode, date: date, sinceISO: start.toISOString(), untilISO: end.toISOString(),
+             label: 'semaine S' + ws + ' (' + iw.year + ')', fileBase: iw.year + '-S' + ws, titre: '# Récap semaine S' + ws + ' — ' + iw.year };
+  }
+  var s = new Date(date + 'T00:00:00'), e = new Date(s.getTime() + 24 * 3600 * 1000);
+  return { mode: 'jour', date: date, sinceISO: s.toISOString(), untilISO: e.toISOString(),
+           label: 'le ' + date, fileBase: date, titre: '# Journal — ' + date };
+}
 
 function loadCommits() {
   var date = $('soirDate').value;
   if (!date) { toast('Choisissez une date'); return; }
-  var start = new Date(date + 'T00:00:00');
-  var end = new Date(start.getTime() + 24 * 3600 * 1000);
-  var sinceISO = start.toISOString(), untilISO = end.toISOString();
+  SOIR = soirRange();
+  var sinceISO = SOIR.sinceISO, untilISO = SOIR.untilISO;
   setStatus('commitsStatus', '<span class="spin"></span> Récupération des commits (toutes branches)…');
   $('commitsWrap').innerHTML = ''; $('recapBlock').style.display = 'none';
   COMMITS = [];
@@ -251,6 +283,7 @@ function loadCommits() {
                   message: (c.commit && c.commit.message ? c.commit.message.split('\n')[0] : ''),
                   author: (c.commit && c.commit.author ? c.commit.author.name : (c.author ? c.author.login : '')),
                   dateISO: d, heure: d ? new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '',
+                  jour: d ? new Date(d).toLocaleDateString('fr-CA') : '',
                   branches: [branch]
                 });
               });
@@ -265,13 +298,13 @@ function loadCommits() {
   chain.then(function () {
     COMMITS.sort(function (a, b) { return (b.dateISO || '').localeCompare(a.dateISO || ''); });
     var err = errors.length ? ' · ⚠️ ' + errors.length + ' repo(s) en erreur' : '';
-    setStatus('commitsStatus', COMMITS.length + ' commit(s) le ' + date + err);
+    setStatus('commitsStatus', COMMITS.length + ' commit(s) · ' + (SOIR ? SOIR.label : date) + err);
     renderCommits();
   }).catch(function (e) { setStatus('commitsStatus', '❌ ' + e.message); });
 }
 
 function renderCommits() {
-  if (!COMMITS.length) { $('commitsWrap').innerHTML = '<div class="empty">Aucun commit ce jour-là.</div>'; $('recapBlock').style.display = 'none'; return; }
+  if (!COMMITS.length) { $('commitsWrap').innerHTML = '<div class="empty">Aucun commit sur cette période.</div>'; $('recapBlock').style.display = 'none'; return; }
   var byRepo = {};
   COMMITS.forEach(function (c) { (byRepo[c.repo] = byRepo[c.repo] || []).push(c); });
   var html = '';
@@ -322,19 +355,33 @@ function statusIcon(s) {
 }
 
 function buildRecap() {
-  var date = $('soirDate').value, lines = ['# Journal — ' + date, '', '## Commits du jour', ''];
+  var isWeek = SOIR && SOIR.mode === 'semaine';
+  var titre = (SOIR && SOIR.titre) || ('# Journal — ' + $('soirDate').value);
+  var lines = [titre, '', '## Commits ' + (isWeek ? 'de la semaine' : 'du jour'), ''];
   var byRepo = {};
   COMMITS.forEach(function (c) { (byRepo[c.repo] = byRepo[c.repo] || []).push(c); });
   if (!COMMITS.length) lines.push('_Aucun commit._', '');
   Object.keys(byRepo).sort().forEach(function (repo) {
     lines.push('### ' + repo);
-    byRepo[repo].forEach(function (c) { lines.push('- `' + c.shortSha + '` ' + c.message + ' _(' + c.author + ', ' + c.heure + ')_'); });
+    if (isWeek) {
+      // En semaine : on regroupe par jour (du plus récent au plus ancien).
+      var byDay = {};
+      byRepo[repo].forEach(function (c) { (byDay[c.jour || '?'] = byDay[c.jour || '?'] || []).push(c); });
+      Object.keys(byDay).sort().reverse().forEach(function (day) {
+        lines.push('- **' + day + '**');
+        byDay[day].forEach(function (c) { lines.push('  - `' + c.shortSha + '` ' + c.message + ' _(' + c.author + ')_'); });
+      });
+    } else {
+      byRepo[repo].forEach(function (c) { lines.push('- `' + c.shortSha + '` ' + c.message + ' _(' + c.author + ', ' + c.heure + ')_'); });
+    }
     lines.push('');
   });
-  var g = { fait: [], en_cours: [], a_faire: [] };
+  var g = { fait: [], committe: [], en_cours: [], a_faire: [] };
   (BACKLOG.actions || []).forEach(function (a) { (g[a.statut] || g.a_faire).push(a); });
   lines.push('## Backlog', '', '**✅ Fait**');
   g.fait.length ? g.fait.forEach(function (a) { lines.push('- [' + a.repo + '] ' + a.titre); }) : lines.push('- —');
+  lines.push('', '**📦 Committé (non déployé/validé)**');
+  g.committe.length ? g.committe.forEach(function (a) { lines.push('- [' + a.repo + '] ' + a.titre + (a.commits && a.commits.length ? ' (`' + a.commits.join('`, `') + '`)' : '')); }) : lines.push('- —');
   lines.push('', '**▶ En cours**');
   g.en_cours.length ? g.en_cours.forEach(function (a) { lines.push('- [' + a.repo + '] ' + a.titre); }) : lines.push('- —');
   lines.push('', '**⏳ À faire**');
@@ -343,12 +390,15 @@ function buildRecap() {
 }
 
 function pushRecap() {
-  var date = $('soirDate').value, branch = $('soirBranch').value.trim() || 'main';
+  var branch = $('soirBranch').value.trim() || 'main';
   var recap = $('recapText').value, withBacklog = $('recapWithBacklog').checked;
-  var path = 'journal/' + date + '.md';
+  var base = (SOIR && SOIR.fileBase) || $('soirDate').value;
+  var isWeek = SOIR && SOIR.mode === 'semaine';
+  var date = base; // conserve la variable pour les messages backlog ci-dessous
+  var path = 'journal/' + base + '.md';
   setStatus('commitsStatus', '<span class="spin"></span> Push du récap' + (withBacklog ? ' + backlog' : '') + '…');
   ghGetContent(CFG.journalRepo, path, branch).then(function (existing) {
-    return ghPutContent(CFG.journalRepo, path, recap, 'Journal ' + date + ' : récap du jour', existing ? existing.sha : null, branch);
+    return ghPutContent(CFG.journalRepo, path, recap, 'Journal ' + base + ' : récap ' + (isWeek ? 'de la semaine' : 'du jour'), existing ? existing.sha : null, branch);
   }).then(function () {
     if (!withBacklog) return null;
     BACKLOG.updated = new Date().toISOString();
@@ -373,25 +423,27 @@ function loadRecaps() {
   gh('GET', '/repos/' + CFG.owner + '/' + CFG.journalRepo + '/contents/journal').then(function (res) {
     if (res.code === 404) { $('recapsList').innerHTML = ''; setStatus('recapsStatus', 'ℹ️ Aucun dossier journal/ pour l\'instant.'); return; }
     if (res.code !== 200 || !res.json || !res.json.length) { $('recapsList').innerHTML = ''; setStatus('recapsStatus', 'ℹ️ Aucun récap pour l\'instant.'); return; }
-    var files = res.json.filter(function (f) { return f.type === 'file' && /^\d{4}-\d{2}-\d{2}\.md$/.test(f.name); });
+    var files = res.json.filter(function (f) { return f.type === 'file' && /^(\d{4}-\d{2}-\d{2}|\d{4}-S\d{2})\.md$/.test(f.name); });
     files.sort(function (a, b) { return b.name.localeCompare(a.name); });
     RECAP_FILES = files;
     if (!files.length) { $('recapsList').innerHTML = ''; setStatus('recapsStatus', 'ℹ️ Aucun récap poussé pour l\'instant.'); $('recapView').innerHTML = '<div class="empty">Les récaps du soir apparaîtront ici.</div>'; return; }
-    setStatus('recapsStatus', files.length + ' récap(s) — du ' + files[files.length - 1].name.slice(0, 10) + ' au ' + files[0].name.slice(0, 10));
+    setStatus('recapsStatus', files.length + ' récap(s)');
     renderRecapsList();
     openRecap(files[0].name); // ouvrir le dernier récap automatiquement
   }).catch(function (e) { setStatus('recapsStatus', '❌ ' + e.message); });
 }
 
-function frDateParts(iso) {
-  var d = new Date(iso + 'T00:00:00');
-  if (isNaN(d)) return { full: iso, w: '' };
+function recapLabel(base) {
+  var wk = base.match(/^(\d{4})-S(\d{2})$/);
+  if (wk) return { full: 'Semaine S' + wk[2], w: wk[1] };
+  var d = new Date(base + 'T00:00:00');
+  if (isNaN(d)) return { full: base, w: '' };
   return { full: d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }), w: d.toLocaleDateString('fr-FR', { weekday: 'long' }) };
 }
 
 function renderRecapsList() {
   $('recapsList').innerHTML = RECAP_FILES.map(function (f) {
-    var p = frDateParts(f.name.slice(0, 10));
+    var p = recapLabel(f.name.replace(/\.md$/, ''));
     return '<button class="recap-item" data-name="' + esc(f.name) + '"><span class="d">' + esc(p.full) + '</span><span class="w">' + esc(p.w) + '</span></button>';
   }).join('');
 }
@@ -500,7 +552,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var id = b.getAttribute('data-id'), act = b.getAttribute('data-act');
     if (act === 'edit') openActionModal(id);
     else if (act === 'del') { if (confirm('Supprimer cette action ?')) { BACKLOG.actions = BACKLOG.actions.filter(function (a) { return a.id !== id; }); renderBacklog(); scheduleAutoSave(); } }
-    else if (act === 'cycle') { var a = findAction(id); if (a) { a.statut = b.getAttribute('data-next'); a.date_faite = a.statut === 'fait' ? CFG.today : ''; renderBacklog(); scheduleAutoSave(); } }
+    else if (act === 'cycle') { var a = findAction(id); if (a) { a.statut = b.getAttribute('data-next'); a.date_faite = (a.statut === 'fait' || a.statut === 'committe') ? CFG.today : ''; renderBacklog(); scheduleAutoSave(); } }
   });
 
   // Délégation : dépliage des commits
