@@ -317,7 +317,7 @@ function renderCommits() {
         + '<div class="commit-head" data-repo="' + esc(repo) + '" data-sha="' + esc(c.sha) + '">'
         + '<span class="sha">' + esc(c.shortSha) + '</span>'
         + '<div style="flex:1"><div class="commit-msg">' + esc(c.message) + '</div>'
-        + '<div class="commit-sub">' + esc(c.author) + ' · ' + esc(c.heure) + ' &nbsp; ' + branches + '</div></div>'
+        + '<div class="commit-sub">' + esc(c.heure) + ' &nbsp; ' + branches + '</div></div>'
         + '<span style="color:var(--muted)">▾</span></div>'
         + '<div class="diff" id="diff-' + esc(c.sha) + '"><div class="empty">Cliquez pour charger le diff…</div></div>'
         + '</div>';
