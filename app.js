@@ -388,6 +388,92 @@ function buildRecap() {
   $('recapText').value = lines.join('\n');
 }
 
+// ---------- Récap SEMAINE : évolution des statuts du backlog ----------
+var WEEK_REVIEW = null;
+function statutLabel(s) { return ({ a_faire: 'À faire', en_cours: 'En cours', committe: 'Committé', fait: 'Fait' })[s] || s || '—'; }
+
+// État du backlog tel qu'il était au dernier commit <= untilISO (snapshot git).
+function backlogAt(untilISO) {
+  return gh('GET', '/repos/' + CFG.owner + '/' + CFG.journalRepo + '/commits?path=' + encodeURIComponent(BACKLOG_PATH) + '&until=' + untilISO + '&per_page=1')
+    .then(function (res) {
+      if (res.code !== 200 || !res.json || !res.json.length) return { actions: [] };
+      return ghGetContent(CFG.journalRepo, BACKLOG_PATH, res.json[0].sha).then(function (f) {
+        if (!f) return { actions: [] };
+        try { return JSON.parse(f.content); } catch (e) { return { actions: [] }; }
+      });
+    });
+}
+
+// Compare l'état de début et de fin de semaine et classe les actions.
+function computeTransitions(startBl, endBl) {
+  var sMap = {}; (startBl.actions || []).forEach(function (a) { sMap[a.id] = a.statut; });
+  var terminal = function (x) { return x === 'fait' || x === 'committe'; };
+  var g = { termine: [], avance: [], nouveau: [], encours: [] };
+  (endBl.actions || []).forEach(function (a) {
+    var s = sMap[a.id], e = a.statut;
+    if (s === undefined) {
+      // Action apparue cette semaine : terminée d'emblée → "Terminé", sinon "Nouveau".
+      if (terminal(e)) g.termine.push({ a: a, from: null, to: e });
+      else if (e !== 'a_faire') g.nouveau.push({ a: a, from: null, to: e });
+      return;
+    }
+    if (s === e) { if (e === 'en_cours') g.encours.push({ a: a, from: s, to: e }); return; }
+    if (terminal(e) && !terminal(s)) g.termine.push({ a: a, from: s, to: e });
+    else g.avance.push({ a: a, from: s, to: e });
+  });
+  g.summaryLine = g.termine.length + ' terminée(s) · ' + g.avance.length + ' avancée(s) · ' + g.nouveau.length + ' nouvelle(s)';
+  return g;
+}
+
+function loadWeekReview() {
+  SOIR = soirRange();
+  setStatus('commitsStatus', '<span class="spin"></span> Analyse des statuts sur la semaine…');
+  $('commitsWrap').innerHTML = ''; $('recapBlock').style.display = 'none';
+  Promise.all([backlogAt(SOIR.sinceISO), backlogAt(SOIR.untilISO)]).then(function (r) {
+    WEEK_REVIEW = computeTransitions(r[0], r[1]);
+    renderWeekReview(WEEK_REVIEW);
+    buildWeekRecap(WEEK_REVIEW);
+    $('recapBlock').style.display = 'block';
+    setStatus('commitsStatus', SOIR.label + ' — ' + WEEK_REVIEW.summaryLine);
+  }).catch(function (e) { setStatus('commitsStatus', '❌ ' + e.message); });
+}
+
+function renderWeekReview(g) {
+  var item = function (t) {
+    var trans = t.from ? (statutLabel(t.from) + ' → ' + statutLabel(t.to)) : ('✨ ' + statutLabel(t.to));
+    return '<div class="commit"><div class="commit-head" style="cursor:default">'
+      + '<div style="flex:1"><div class="commit-msg">' + esc(t.a.titre) + '</div>'
+      + '<div class="commit-sub"><span class="repo-tag">' + esc(t.a.repo || '?') + '</span> &nbsp; ' + esc(trans) + '</div></div></div></div>';
+  };
+  var bloc = function (titre, arr) {
+    if (!arr.length) return '';
+    return '<div class="repo-group"><h3>' + titre + ' <span class="count-badge">' + arr.length + '</span></h3>' + arr.map(item).join('') + '</div>';
+  };
+  var html = bloc('✅ Terminé cette semaine', g.termine)
+           + bloc('🔄 Avancé', g.avance)
+           + bloc('➕ Nouveau', g.nouveau)
+           + bloc('⏳ Toujours en cours', g.encours);
+  $('commitsWrap').innerHTML = html || '<div class="empty">Aucun mouvement de statut sur cette semaine.</div>';
+}
+
+function buildWeekRecap(g) {
+  var lines = [(SOIR && SOIR.titre) || '# Récap semaine', '', '_Ce qui a bougé cette semaine (statut début → fin)._', ''];
+  var sec = function (titre, arr, showFrom) {
+    lines.push('## ' + titre);
+    if (!arr.length) { lines.push('- —', ''); return; }
+    arr.forEach(function (t) {
+      var trans = showFrom ? (t.from ? ' (' + statutLabel(t.from) + ' → ' + statutLabel(t.to) + ')' : ' (✨ → ' + statutLabel(t.to) + ')') : '';
+      lines.push('- [' + (t.a.repo || '?') + '] ' + t.a.titre + trans);
+    });
+    lines.push('');
+  };
+  sec('✅ Terminé', g.termine, true);
+  sec('🔄 Avancé', g.avance, true);
+  sec('➕ Nouveau', g.nouveau, false);
+  sec('⏳ Toujours en cours', g.encours, false);
+  $('recapText').value = lines.join('\n');
+}
+
 function pushRecap() {
   var branch = $('soirBranch').value.trim() || 'main';
   var recap = $('recapText').value, withBacklog = $('recapWithBacklog').checked;
@@ -564,7 +650,13 @@ document.addEventListener('DOMContentLoaded', function () {
   $('btnCloseAction').addEventListener('click', function () { $('actionModal').classList.remove('open'); });
   $('btnSaveAction').addEventListener('click', saveAction);
   $('btnSaveBacklog').addEventListener('click', saveBacklog);
-  $('btnLoadCommits').addEventListener('click', loadCommits);
+  $('btnLoadCommits').addEventListener('click', function () {
+    var mode = ($('soirMode') && $('soirMode').value) || 'jour';
+    if (mode === 'semaine') loadWeekReview(); else loadCommits();
+  });
+  if ($('soirMode')) $('soirMode').addEventListener('change', function () {
+    $('btnLoadCommits').textContent = ($('soirMode').value === 'semaine') ? '📊 Analyser la semaine' : '📥 Charger les commits';
+  });
   $('btnPushRecap').addEventListener('click', pushRecap);
 
   // Délégation : cartes du backlog
