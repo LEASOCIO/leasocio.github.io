@@ -369,10 +369,10 @@ function buildRecap() {
       byRepo[repo].forEach(function (c) { (byDay[c.jour || '?'] = byDay[c.jour || '?'] || []).push(c); });
       Object.keys(byDay).sort().reverse().forEach(function (day) {
         lines.push('- **' + day + '**');
-        byDay[day].forEach(function (c) { lines.push('  - `' + c.shortSha + '` ' + c.message + ' _(' + c.author + ')_'); });
+        byDay[day].forEach(function (c) { lines.push('  - `' + c.shortSha + '` ' + c.message); });
       });
     } else {
-      byRepo[repo].forEach(function (c) { lines.push('- `' + c.shortSha + '` ' + c.message + ' _(' + c.author + ', ' + c.heure + ')_'); });
+      byRepo[repo].forEach(function (c) { lines.push('- `' + c.shortSha + '` ' + c.message + ' _(' + c.heure + ')_'); });
     }
     lines.push('');
   });
