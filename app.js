@@ -312,12 +312,11 @@ function renderCommits() {
     var list = byRepo[repo];
     html += '<div class="repo-group"><h3>📦 ' + esc(repo) + ' <span class="count-badge">' + list.length + '</span></h3>';
     list.forEach(function (c) {
-      var branches = c.branches.map(function (b) { return '<span class="branch-chip">' + esc(b) + '</span>'; }).join(' ');
       html += '<div class="commit">'
         + '<div class="commit-head" data-repo="' + esc(repo) + '" data-sha="' + esc(c.sha) + '">'
         + '<span class="sha">' + esc(c.shortSha) + '</span>'
         + '<div style="flex:1"><div class="commit-msg">' + esc(c.message) + '</div>'
-        + '<div class="commit-sub">' + esc(c.heure) + ' &nbsp; ' + branches + '</div></div>'
+        + '<div class="commit-sub">' + esc(c.heure) + '</div></div>'
         + '<span style="color:var(--muted)">▾</span></div>'
         + '<div class="diff" id="diff-' + esc(c.sha) + '"><div class="empty">Cliquez pour charger le diff…</div></div>'
         + '</div>';
@@ -417,7 +416,7 @@ function pushRecap() {
 // Le matin : relire les récaps du soir déjà poussés (journal/AAAA-MM-JJ.md).
 var RECAP_FILES = [], _recapsLoaded = false;
 
-function loadRecaps() {
+function loadRecaps(andThen) {
   setStatus('recapsStatus', '<span class="spin"></span> Chargement des récaps…');
   $('recapView').innerHTML = '';
   gh('GET', '/repos/' + CFG.owner + '/' + CFG.journalRepo + '/contents/journal').then(function (res) {
@@ -429,8 +428,29 @@ function loadRecaps() {
     if (!files.length) { $('recapsList').innerHTML = ''; setStatus('recapsStatus', 'ℹ️ Aucun récap poussé pour l\'instant.'); $('recapView').innerHTML = '<div class="empty">Les récaps du soir apparaîtront ici.</div>'; return; }
     setStatus('recapsStatus', files.length + ' récap(s)');
     renderRecapsList();
-    openRecap(files[0].name); // ouvrir le dernier récap automatiquement
+    if (andThen) andThen();
+    else openRecap(files[0].name); // ouvrir le dernier récap automatiquement
   }).catch(function (e) { setStatus('recapsStatus', '❌ ' + e.message); });
+}
+
+// Ouvre le dernier récap JOURNALIER antérieur à aujourd'hui (le "travail de la
+// veille", robuste aux week-ends). Bascule sur l'onglet Récaps.
+function ouvrirRecapVeille() {
+  var open = function () {
+    var veille = RECAP_FILES.filter(function (f) {
+      return /^\d{4}-\d{2}-\d{2}\.md$/.test(f.name) && f.name.slice(0, 10) < CFG.today;
+    })[0]; // RECAP_FILES trié décroissant → le 1er < aujourd'hui = la veille
+    if (!veille) {
+      setStatus('recapsStatus', 'Aucun récap de la veille.');
+      $('recapView').innerHTML = '<div class="empty">Aucun récap journalier antérieur à aujourd\'hui.</div>';
+      return;
+    }
+    openRecap(veille.name);
+  };
+  // On marque comme chargé AVANT showView pour éviter son auto-chargement, puis
+  // on pilote nous-mêmes l'ouverture sur le récap de la veille.
+  if (_recapsLoaded && RECAP_FILES.length) { showView('recaps'); open(); }
+  else { _recapsLoaded = true; showView('recaps'); loadRecaps(open); }
 }
 
 function recapLabel(base) {
@@ -540,6 +560,7 @@ document.addEventListener('DOMContentLoaded', function () {
   $('btnTestToken').addEventListener('click', testToken);
   $('btnRefresh').addEventListener('click', loadBacklog);
   $('btnNewAction').addEventListener('click', function () { openActionModal(); });
+  $('btnRecapVeille').addEventListener('click', ouvrirRecapVeille);
   $('btnCloseAction').addEventListener('click', function () { $('actionModal').classList.remove('open'); });
   $('btnSaveAction').addEventListener('click', saveAction);
   $('btnSaveBacklog').addEventListener('click', saveBacklog);
