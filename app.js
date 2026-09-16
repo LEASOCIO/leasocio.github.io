@@ -478,14 +478,6 @@ function computeTransitions(startBl, endBl) {
     if (terminal(e) && !terminal(s)) g.termine.push({ a: a, from: s, to: e });
     else g.avance.push({ a: a, from: s, to: e });
   });
-  // Tri par REPO (puis par titre) dans chaque section, pour regrouper visuellement
-  // les actions d'un même repo dans le récap de la semaine.
-  var parRepo = function (x, y) {
-    var rx = (x.a.repo || '').toLowerCase(), ry = (y.a.repo || '').toLowerCase();
-    if (rx < ry) return -1; if (rx > ry) return 1;
-    return (x.a.titre || '').localeCompare(y.a.titre || '');
-  };
-  ['termine', 'avance', 'nouveau', 'encours'].forEach(function (k) { g[k].sort(parRepo); });
   g.summaryLine = g.termine.length + ' terminée(s) · ' + g.avance.length + ' avancée(s) · ' + g.nouveau.length + ' nouvelle(s)';
   return g;
 }
@@ -503,39 +495,61 @@ function loadWeekReview() {
   }).catch(function (e) { setStatus('commitsStatus', '❌ ' + e.message); });
 }
 
+// Catégories de mouvement, dans l'ordre de priorité d'affichage au sein d'un repo.
+var WEEK_CATS = [
+  { key: 'termine', icon: '✅', label: 'Terminé' },
+  { key: 'avance',  icon: '🔄', label: 'Avancé' },
+  { key: 'nouveau', icon: '➕', label: 'Nouveau' },
+  { key: 'encours', icon: '⏳', label: 'En cours' }
+];
+
+// Regroupe toutes les transitions PAR REPO (volet). Renvoie une liste ordonnée
+// [{ repo, items:[{ t, cat, order }] }], repos triés alphabétiquement, items
+// triés par catégorie (terminé → avancé → nouveau → en cours) puis par titre.
+function groupWeekByRepo(g) {
+  var byRepo = {};
+  WEEK_CATS.forEach(function (c, ci) {
+    (g[c.key] || []).forEach(function (t) {
+      var r = t.a.repo || '?';
+      (byRepo[r] = byRepo[r] || []).push({ t: t, cat: c, order: ci });
+    });
+  });
+  return Object.keys(byRepo).sort(function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); })
+    .map(function (r) {
+      byRepo[r].sort(function (x, y) { return x.order - y.order || (x.t.a.titre || '').localeCompare(y.t.a.titre || ''); });
+      return { repo: r, items: byRepo[r] };
+    });
+}
+
 function renderWeekReview(g) {
-  var item = function (t) {
-    var trans = t.from ? (statutLabel(t.from) + ' → ' + statutLabel(t.to)) : ('✨ ' + statutLabel(t.to));
-    return '<div class="commit"><div class="commit-head" style="cursor:default">'
-      + '<div style="flex:1"><div class="commit-msg">' + esc(t.a.titre) + '</div>'
-      + '<div class="commit-sub"><span class="repo-tag">' + esc(t.a.repo || '?') + '</span> &nbsp; ' + esc(trans) + '</div></div></div></div>';
-  };
-  var bloc = function (titre, arr) {
-    if (!arr.length) return '';
-    return '<div class="repo-group"><h3>' + titre + ' <span class="count-badge">' + arr.length + '</span></h3>' + arr.map(item).join('') + '</div>';
-  };
-  var html = bloc('✅ Terminé cette semaine', g.termine)
-           + bloc('🔄 Avancé', g.avance)
-           + bloc('➕ Nouveau', g.nouveau)
-           + bloc('⏳ Toujours en cours', g.encours);
+  var groups = groupWeekByRepo(g);
+  var html = groups.map(function (grp) {
+    var items = grp.items.map(function (x) {
+      var t = x.t;
+      var trans = t.from ? (statutLabel(t.from) + ' → ' + statutLabel(t.to)) : ('✨ ' + statutLabel(t.to));
+      return '<div class="commit"><div class="commit-head" style="cursor:default"><div style="flex:1">'
+        + '<div class="commit-msg">' + x.cat.icon + ' ' + esc(t.a.titre) + '</div>'
+        + '<div class="commit-sub">' + esc(x.cat.label) + ' &nbsp;·&nbsp; ' + esc(trans) + '</div></div></div></div>';
+    }).join('');
+    return '<div class="repo-group"><h3><span class="repo-tag">' + esc(grp.repo) + '</span> '
+      + '<span class="count-badge">' + grp.items.length + '</span></h3>' + items + '</div>';
+  }).join('');
   $('commitsWrap').innerHTML = html || '<div class="empty">Aucun mouvement de statut sur cette semaine.</div>';
 }
 
 function buildWeekRecap(g) {
-  var lines = [(SOIR && SOIR.titre) || '# Récap semaine', '', '_Ce qui a bougé cette semaine (statut début → fin)._', ''];
-  var sec = function (titre, arr, showFrom) {
-    lines.push('## ' + titre);
-    if (!arr.length) { lines.push('- —', ''); return; }
-    arr.forEach(function (t) {
-      var trans = showFrom ? (t.from ? ' (' + statutLabel(t.from) + ' → ' + statutLabel(t.to) + ')' : ' (✨ → ' + statutLabel(t.to) + ')') : '';
-      lines.push('- [' + (t.a.repo || '?') + '] ' + t.a.titre + trans);
+  var lines = [(SOIR && SOIR.titre) || '# Récap semaine', '', '_Ce qui a bougé cette semaine, par projet._', ''];
+  var groups = groupWeekByRepo(g);
+  if (!groups.length) { lines.push('- —'); }
+  groups.forEach(function (grp) {
+    lines.push('## ' + grp.repo);
+    grp.items.forEach(function (x) {
+      var t = x.t;
+      var trans = t.from ? ' (' + statutLabel(t.from) + ' → ' + statutLabel(t.to) + ')' : ' (✨ → ' + statutLabel(t.to) + ')';
+      lines.push('- ' + x.cat.icon + ' ' + t.a.titre + trans);
     });
     lines.push('');
-  };
-  sec('✅ Terminé', g.termine, true);
-  sec('🔄 Avancé', g.avance, true);
-  sec('➕ Nouveau', g.nouveau, false);
-  sec('⏳ Toujours en cours', g.encours, false);
+  });
   $('recapText').value = lines.join('\n');
 }
 
