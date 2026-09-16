@@ -167,19 +167,76 @@ function scheduleAutoSave() {
   _saveTimer = setTimeout(function () { _saveTimer = null; pushBacklog(true); }, 1000);
 }
 
+// Fusionne le backlog LOCAL (édité ici) avec le backlog DISTANT (modifié par
+// un autre éditeur ou par l'agent) — par identifiant d'action. Les champs
+// locaux priment (statut / notes édités par l'utilisateur), MAIS les listes de
+// `commits` sont UNIONNÉES (on ne perd pas les commits ajoutés par l'agent),
+// et les actions présentes seulement à distance sont conservées.
+function mergeBacklogs(local, remote) {
+  var remoteById = {};
+  (remote.actions || []).forEach(function (a) { if (a && a.id) remoteById[a.id] = a; });
+  var out = [], seen = {};
+  (local.actions || []).forEach(function (la) {
+    if (!la || !la.id) { out.push(la); return; }
+    seen[la.id] = 1;
+    var ra = remoteById[la.id];
+    if (!ra) { out.push(la); return; }
+    var merged = Object.assign({}, ra, la); // champs locaux prioritaires
+    // Union des commits (clé = sha), pour ne perdre ni ceux de l'agent ni ceux d'ici.
+    var commits = [], shas = {};
+    (la.commits || []).concat(ra.commits || []).forEach(function (c) {
+      var k = c && (c.sha || JSON.stringify(c));
+      if (k && !shas[k]) { shas[k] = 1; commits.push(c); }
+    });
+    merged.commits = commits;
+    merged.date_faite = la.date_faite || ra.date_faite || '';
+    out.push(merged);
+  });
+  (remote.actions || []).forEach(function (ra) { if (ra && ra.id && !seen[ra.id]) out.push(ra); });
+  return out;
+}
+
+// Un envoi (PUT) ; en cas de conflit 409 (sha périmé car le fichier a changé
+// ailleurs), on refusionne avec la version distante et on retente (max 3 fois).
+function pushBacklogAttempt(branch, tries) {
+  BACKLOG.updated = new Date().toISOString();
+  var pretty = JSON.stringify(BACKLOG, null, 2);
+  var payload = { message: 'Journal: mise à jour du backlog (' + CFG.today + ')', content: b64encode(pretty) };
+  if (BACKLOG_SHA) payload.sha = BACKLOG_SHA;
+  if (branch) payload.branch = branch;
+  return gh('PUT', '/repos/' + CFG.owner + '/' + CFG.journalRepo + '/contents/' + BACKLOG_PATH, payload).then(function (res) {
+    if (res.code === 200 || res.code === 201) {
+      BACKLOG_SHA = (res.json && res.json.content) ? res.json.content.sha : BACKLOG_SHA;
+      return { merged: tries > 0 };
+    }
+    if (res.code === 409 && tries < 3) {
+      // Conflit de version : on relit le distant, on fusionne, on retente.
+      setStatus('backlogStatus', '<span class="spin"></span> Synchronisation (conflit détecté)…');
+      return ghGetContent(CFG.journalRepo, BACKLOG_PATH, branch).then(function (file) {
+        if (file) {
+          var remote = { actions: [] };
+          try { remote = JSON.parse(file.content); } catch (e) {}
+          BACKLOG.actions = mergeBacklogs(BACKLOG, remote);
+          BACKLOG_SHA = file.sha;
+        }
+        return pushBacklogAttempt(branch, tries + 1);
+      });
+    }
+    throw new Error('HTTP ' + res.code + (res.code === 409 ? ' (conflit persistant)' : '') + ' : ' + ((res.json && res.json.message) || ''));
+  });
+}
+
 function pushBacklog(auto) {
   if (!CFG.token) { setStatus('backlogStatus', '⚠️ Token GitHub requis (⚙️).'); return Promise.resolve(); }
   if (_saving) { _dirtyAgain = true; return Promise.resolve(); }
   _saving = true;
   var branch = $('writeBranch').value.trim() || 'main';
   setStatus('backlogStatus', '<span class="spin"></span> Enregistrement…');
-  BACKLOG.updated = new Date().toISOString();
-  var pretty = JSON.stringify(BACKLOG, null, 2);
-  return ghPutContent(CFG.journalRepo, BACKLOG_PATH, pretty, 'Journal: mise à jour du backlog (' + CFG.today + ')', BACKLOG_SHA, branch)
+  return pushBacklogAttempt(branch, 0)
     .then(function (r) {
-      BACKLOG_SHA = r.content ? r.content.sha : BACKLOG_SHA;
+      if (r && r.merged) renderBacklog(); // la fusion a pu intégrer des actions distantes
       var t = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-      setStatus('backlogStatus', '✅ Enregistré sur <b>' + esc(branch) + '</b> à ' + t);
+      setStatus('backlogStatus', '✅ Enregistré sur <b>' + esc(branch) + '</b> à ' + t + (r && r.merged ? ' (fusionné)' : ''));
       if (!auto) toast('Backlog enregistré sur GitHub');
     })
     .catch(function (e) { setStatus('backlogStatus', '❌ Échec de l\'enregistrement : ' + esc(e.message) + ' — vos changements restent en local, réessayez.'); })
