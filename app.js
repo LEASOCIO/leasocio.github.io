@@ -478,6 +478,14 @@ function computeTransitions(startBl, endBl) {
     if (terminal(e) && !terminal(s)) g.termine.push({ a: a, from: s, to: e });
     else g.avance.push({ a: a, from: s, to: e });
   });
+  // Tri par REPO (puis par titre) dans chaque section, pour regrouper visuellement
+  // les actions d'un même repo dans le récap de la semaine.
+  var parRepo = function (x, y) {
+    var rx = (x.a.repo || '').toLowerCase(), ry = (y.a.repo || '').toLowerCase();
+    if (rx < ry) return -1; if (rx > ry) return 1;
+    return (x.a.titre || '').localeCompare(y.a.titre || '');
+  };
+  ['termine', 'avance', 'nouveau', 'encours'].forEach(function (k) { g[k].sort(parRepo); });
   g.summaryLine = g.termine.length + ' terminée(s) · ' + g.avance.length + ' avancée(s) · ' + g.nouveau.length + ' nouvelle(s)';
   return g;
 }
