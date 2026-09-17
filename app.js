@@ -2,7 +2,8 @@
 'use strict';
 
 // ------------------------------- Config -----------------------------------
-var LS = { token: 'gh_token', owner: 'gh_owner', repos: 'gh_repos', journal: 'gh_journal' };
+var LS = { token: 'gh_token', owner: 'gh_owner', repos: 'gh_repos', journal: 'gh_journal',
+  contrib: 'gh_contrib', contribName: 'gh_contrib_name' };
 var DEFAULT_OWNER = 'leasocio';
 var DEFAULT_REPOS = 'S,BD,todolist,ACC,MCR,SP,FO,VS,5S,EKIP';
 var DEFAULT_JOURNAL = 'todolist';
@@ -18,6 +19,8 @@ function getCfg() {
     owner: lsGet(LS.owner, DEFAULT_OWNER),
     repos: lsGet(LS.repos, DEFAULT_REPOS).split(',').map(function (r) { return r.trim(); }).filter(Boolean),
     journalRepo: lsGet(LS.journal, DEFAULT_JOURNAL),
+    contrib: lsGet(LS.contrib, '0') === '1',       // mode contributeur (propositions only)
+    contribName: lsGet(LS.contribName, ''),        // nom affiché sur les propositions
     today: new Date().toISOString().slice(0, 10)
   };
 }
@@ -118,14 +121,18 @@ function loadBacklog() {
 }
 
 function renderBacklog() {
-  var groups = { en_cours: [], a_faire: [], committe: [], fait: [] };
+  var groups = { a_valider: [], en_cours: [], a_faire: [], committe: [], fait: [] };
   (BACKLOG.actions || []).forEach(function (a) { (groups[a.statut] || groups.a_faire).push(a); });
   var defs = [
+    { key: 'a_valider', label: 'À valider', cls: 'avalider' },
     { key: 'en_cours', label: 'En cours', cls: 'wip' },
     { key: 'a_faire', label: 'À faire', cls: 'todo' },
     { key: 'committe', label: 'Committé', cls: 'committe' },
     { key: 'fait', label: 'Fait', cls: 'fait' }
   ];
+  // La colonne « À valider » n'apparaît que s'il y a des propositions (évite une
+  // colonne vide permanente pour le propriétaire quand personne n'a rien proposé).
+  if (!groups.a_valider.length) defs.shift();
   var html = '';
   defs.forEach(function (d) {
     html += '<div class="col c-' + d.cls + '"><h2>' + d.label + ' <span class="pill ' + d.cls + '">' + groups[d.key].length + '</span></h2>';
@@ -138,20 +145,40 @@ function renderBacklog() {
 
 function cardHtml(a) {
   var commits = (a.commits && a.commits.length) ? '<span title="commits liés">🔗 ' + a.commits.length + '</span>' : '';
-  var cycle = { a_faire: 'en_cours', en_cours: 'committe', committe: 'fait', fait: 'a_faire' };
-  var next = cycle[a.statut] || 'en_cours';
-  var lblByNext = { en_cours: '▶ Démarrer', committe: '✓ Committé', fait: '✔ Terminer', a_faire: '↺ Rouvrir' };
-  var nextLbl = lblByNext[next] || '▶';
+  var isProp = a.statut === 'a_valider';
+  var contrib = CFG.contrib;
+  var id = esc(a.id);
+  var auteur = a.auteur ? '<span title="Proposé par">🙋 ' + esc(a.auteur) + '</span>' : '';
+  var repoTag = isProp ? '<span class="repo-tag" title="À affecter">🙋 proposition</span>'
+    : '<span class="repo-tag">' + esc(a.repo || '?') + '</span>';
+
+  var actions;
+  if (isProp) {
+    // Propositions : le propriétaire valide (affecte un repo) ou rejette ; un
+    // contributeur peut corriger / retirer la sienne, mais pas la valider.
+    actions = contrib
+      ? '<button class="mini" data-act="edit" data-id="' + id + '">✎ Éditer</button>'
+        + '<button class="mini" data-act="del" data-id="' + id + '">🗑</button>'
+      : '<button class="mini" data-act="valider" data-id="' + id + '">✓ Valider</button>'
+        + '<button class="mini" data-act="rejeter" data-id="' + id + '">✗ Rejeter</button>';
+  } else if (contrib) {
+    // Contributeur : les vraies tâches sont en lecture seule (il ne fait que proposer).
+    actions = '';
+  } else {
+    var cycle = { a_faire: 'en_cours', en_cours: 'committe', committe: 'fait', fait: 'a_faire' };
+    var next = cycle[a.statut] || 'en_cours';
+    var lblByNext = { en_cours: '▶ Démarrer', committe: '✓ Committé', fait: '✔ Terminer', a_faire: '↺ Rouvrir' };
+    actions = '<button class="mini" data-act="cycle" data-id="' + id + '" data-next="' + next + '">' + (lblByNext[next] || '▶') + '</button>'
+      + '<button class="mini" data-act="edit" data-id="' + id + '">✎ Éditer</button>'
+      + '<button class="mini" data-act="del" data-id="' + id + '">🗑</button>';
+  }
   return '<div class="card">'
     + '<div class="title">' + esc(a.titre) + '</div>'
-    + '<div class="meta"><span class="repo-tag">' + esc(a.repo || '?') + '</span>'
+    + '<div class="meta">' + repoTag + auteur
     + (a.date_faite ? '<span>✅ ' + esc(a.date_faite) + '</span>' : '') + commits + '</div>'
     + (a.notes ? '<div class="notes">' + esc(a.notes) + '</div>' : '')
-    + '<div class="card-actions">'
-    + '<button class="mini" data-act="cycle" data-id="' + esc(a.id) + '" data-next="' + next + '">' + nextLbl + '</button>'
-    + '<button class="mini" data-act="edit" data-id="' + esc(a.id) + '">✎ Éditer</button>'
-    + '<button class="mini" data-act="del" data-id="' + esc(a.id) + '">🗑</button>'
-    + '</div></div>';
+    + (actions ? '<div class="card-actions">' + actions + '</div>' : '')
+    + '</div>';
 }
 
 function findAction(id) { return (BACKLOG.actions || []).filter(function (a) { return a.id === id; })[0]; }
@@ -251,26 +278,43 @@ function fillRepoSelect() {
   var sel = $('actRepo'); sel.innerHTML = '';
   CFG.repos.forEach(function (r) { sel.innerHTML += '<option value="' + esc(r) + '">' + esc(r) + '</option>'; });
 }
-function openActionModal(id) {
+function openActionModal(id, opts) {
+  opts = opts || {};
   $('actId').value = id || '';
   var a = id ? findAction(id) : null;
-  $('actionModalTitle').textContent = id ? '✎ Modifier l\'action' : '＋ Nouvelle action';
+  // Formulaire restreint pour un contributeur : en création, ou quand il édite
+  // sa propre proposition (« À valider »). Il ne choisit ni repo ni statut.
+  var restricted = CFG.contrib && (!a || a.statut === 'a_valider');
+  $('actMetaRow').style.display = restricted ? 'none' : '';
+  $('actionModalTitle').textContent = restricted
+    ? (id ? '🙋 Ma proposition' : '🙋 Proposer une action')
+    : (id ? '✎ Modifier l\'action' : '＋ Nouvelle action');
   $('actTitre').value = a ? a.titre : '';
-  $('actRepo').value = a ? a.repo : (CFG.repos[0] || '');
-  $('actStatut').value = a ? a.statut : 'a_faire';
+  // « Valider » (propriétaire) : on pré-affecte un repo et on bascule en « À faire ».
+  $('actRepo').value = a ? (a.repo || CFG.repos[0] || '') : (CFG.repos[0] || '');
+  $('actStatut').value = opts.validate ? 'a_faire' : (a ? a.statut : 'a_faire');
   $('actNotes').value = a ? (a.notes || '') : '';
   $('actionModal').classList.add('open');
 }
 function saveAction() {
   var id = $('actId').value, titre = $('actTitre').value.trim();
   if (!titre) { toast('Titre requis'); return; }
-  var repo = $('actRepo').value, statut = $('actStatut').value, notes = $('actNotes').value.trim();
-  if (id) {
-    var done = (statut === 'fait' || statut === 'committe');
-    var a = findAction(id); a.titre = titre; a.repo = repo; a.statut = statut; a.notes = notes;
-    if (done && !a.date_faite) a.date_faite = CFG.today;
-    if (!done) a.date_faite = '';
+  var notes = $('actNotes').value.trim();
+  var a = id ? findAction(id) : null;
+  var restricted = CFG.contrib && (!a || (a && a.statut === 'a_valider'));
+  if (a) {
+    a.titre = titre; a.notes = notes;
+    if (!restricted) { // le propriétaire (ou hors mode contributeur) fixe repo + statut
+      a.repo = $('actRepo').value; a.statut = $('actStatut').value;
+    }
+    var done = (a.statut === 'fait' || a.statut === 'committe');
+    a.date_faite = done ? (a.date_faite || CFG.today) : '';
+  } else if (restricted) {
+    // Contributeur : proposition « À valider », sans repo, avec son nom.
+    BACKLOG.actions.push({ id: 'a' + Date.now().toString(36), titre: titre, repo: '', statut: 'a_valider',
+      notes: notes, auteur: CFG.contribName || '', date_prevue: CFG.today, date_faite: '', commits: [] });
   } else {
+    var repo = $('actRepo').value, statut = $('actStatut').value;
     var done2 = (statut === 'fait' || statut === 'committe');
     BACKLOG.actions.push({ id: 'a' + Date.now().toString(36), titre: titre, repo: repo, statut: statut, notes: notes,
       date_prevue: CFG.today, date_faite: done2 ? CFG.today : '', commits: [] });
@@ -278,7 +322,7 @@ function saveAction() {
   $('actionModal').classList.remove('open');
   renderBacklog();
   scheduleAutoSave();
-  toast('Action enregistrée');
+  toast(restricted && !id ? '🙋 Proposition envoyée' : 'Action enregistrée');
 }
 
 // ------------------------------- Commits (soir) ---------------------------
@@ -432,7 +476,9 @@ function buildRecap() {
     }
     lines.push('');
   });
-  var g = { fait: [], committe: [], en_cours: [], a_faire: [] };
+  var g = { fait: [], committe: [], en_cours: [], a_faire: [], a_valider: [] };
+  // Les propositions « À valider » ont leur propre seau : elles ne polluent pas
+  // le récap « À faire » tant qu'elles ne sont pas validées.
   (BACKLOG.actions || []).forEach(function (a) { (g[a.statut] || g.a_faire).push(a); });
   lines.push('## Backlog', '', '**✅ Fait**');
   g.fait.length ? g.fait.forEach(function (a) { lines.push('- [' + a.repo + '] ' + a.titre); }) : lines.push('- —');
@@ -674,6 +720,8 @@ function openSettings() {
   $('cfgOwner').value = CFG.owner;
   $('cfgRepos').value = CFG.repos.join(',');
   $('cfgJournal').value = CFG.journalRepo;
+  $('cfgContrib').checked = CFG.contrib;
+  $('cfgContribName').value = CFG.contribName;
   $('cfgToken').value = '';
   $('settingsModal').classList.add('open');
 }
@@ -683,7 +731,10 @@ function saveSettings() {
   if ($('cfgOwner').value.trim()) lsSet(LS.owner, $('cfgOwner').value.trim());
   if ($('cfgRepos').value.trim()) lsSet(LS.repos, $('cfgRepos').value.trim());
   if ($('cfgJournal').value.trim()) lsSet(LS.journal, $('cfgJournal').value.trim());
+  lsSet(LS.contrib, $('cfgContrib').checked ? '1' : '0');
+  lsSet(LS.contribName, $('cfgContribName').value.trim());
   CFG = getCfg(); fillRepoSelect();
+  renderBacklog(); // le mode contributeur change l'affichage (colonnes / boutons)
   setStatus('cfgStatus', '✅ Enregistré.');
   toast('Configuration enregistrée');
 }
@@ -743,6 +794,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var b = e.target.closest('button[data-act]'); if (!b) return;
     var id = b.getAttribute('data-id'), act = b.getAttribute('data-act');
     if (act === 'edit') openActionModal(id);
+    else if (act === 'valider') openActionModal(id, { validate: true }); // propriétaire : affecte un repo, passe en « À faire »
+    else if (act === 'rejeter') { if (confirm('Rejeter (supprimer) cette proposition ?')) { BACKLOG.actions = BACKLOG.actions.filter(function (a) { return a.id !== id; }); renderBacklog(); scheduleAutoSave(); } }
     else if (act === 'del') { if (confirm('Supprimer cette action ?')) { BACKLOG.actions = BACKLOG.actions.filter(function (a) { return a.id !== id; }); renderBacklog(); scheduleAutoSave(); } }
     else if (act === 'cycle') { var a = findAction(id); if (a) { a.statut = b.getAttribute('data-next'); a.date_faite = (a.statut === 'fait' || a.statut === 'committe') ? CFG.today : ''; renderBacklog(); scheduleAutoSave(); } }
   });

@@ -144,9 +144,9 @@
       display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:800;
     }
     .col h2::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--todo)}
-    .col.c-wip h2::before{background:var(--wip)} .col.c-fait h2::before{background:var(--ok)} .col.c-committe h2::before{background:#4f46e5}
+    .col.c-wip h2::before{background:var(--wip)} .col.c-fait h2::before{background:var(--ok)} .col.c-committe h2::before{background:#4f46e5} .col.c-avalider h2::before{background:#d97706}
     .pill{font-size:.66rem;font-weight:800;padding:2px 9px;border-radius:20px;margin-left:auto}
-    .pill.todo{background:var(--todo-bg);color:var(--todo)} .pill.wip{background:var(--wip-bg);color:var(--wip)} .pill.fait{background:var(--ok-bg);color:var(--ok)} .pill.committe{background:#e0e7ff;color:#3730a3}
+    .pill.todo{background:var(--todo-bg);color:var(--todo)} .pill.wip{background:var(--wip-bg);color:var(--wip)} .pill.fait{background:var(--ok-bg);color:var(--ok)} .pill.committe{background:#e0e7ff;color:#3730a3} .pill.avalider{background:#fef3c7;color:#92400e}
 
     .card{
       background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);
@@ -154,7 +154,7 @@
       box-shadow:var(--shadow-sm);transition:box-shadow .18s,transform .18s,border-color .18s;
     }
     .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--todo);opacity:.85}
-    .col.c-wip .card::before{background:var(--wip)} .col.c-fait .card::before{background:var(--ok)} .col.c-committe .card::before{background:#4f46e5}
+    .col.c-wip .card::before{background:var(--wip)} .col.c-fait .card::before{background:var(--ok)} .col.c-committe .card::before{background:#4f46e5} .col.c-avalider .card::before{background:#d97706}
     .card:hover{box-shadow:var(--shadow);transform:translateY(-1px);border-color:var(--line-2)}
     .card .title{font-weight:650;font-size:.94rem;margin-bottom:7px;color:var(--text)}
     .card .meta{display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-size:.73rem;color:var(--muted)}
@@ -363,6 +363,8 @@
       <div class="field"><label>Propriétaire (owner)</label><input id="cfgOwner" placeholder="leasocio"></div>
       <div class="field"><label>Repos suivis (virgules)</label><input id="cfgRepos" placeholder="S,BD,ACC,..."></div>
       <div class="field"><label>Repo du journal</label><input id="cfgJournal" placeholder="todolist"></div>
+      <div class="field"><label><input type="checkbox" id="cfgContrib" style="width:auto;margin-right:6px;vertical-align:middle"> Mode contributeur (je propose des actions, sans les valider)</label></div>
+      <div class="field"><label>Votre nom (affiché sur vos propositions)</label><input id="cfgContribName" placeholder="Ex : Jean Dupont"></div>
       <div id="cfgStatus" class="status-line"></div>
       <div class="row" style="justify-content:flex-end;margin-top:8px">
         <button class="btn ghost" id="btnCloseSettings">Fermer</button>
@@ -378,10 +380,10 @@
       <p>Une action = une tâche du backlog, rattachée à un outil.</p>
       <input type="hidden" id="actId">
       <div class="field"><label>Titre</label><input id="actTitre" placeholder="Ex : VS — mail de délégation"></div>
-      <div class="row">
+      <div class="row" id="actMetaRow">
         <div class="field" style="flex:1"><label>Outil / repo</label><select id="actRepo"></select></div>
         <div class="field" style="flex:1"><label>Statut</label>
-          <select id="actStatut"><option value="a_faire">À faire</option><option value="en_cours">En cours</option><option value="committe">Committé</option><option value="fait">Fait</option></select>
+          <select id="actStatut"><option value="a_valider">À valider</option><option value="a_faire">À faire</option><option value="en_cours">En cours</option><option value="committe">Committé</option><option value="fait">Fait</option></select>
         </div>
       </div>
       <div class="field"><label>Notes</label><textarea id="actNotes" style="min-height:80px"></textarea></div>

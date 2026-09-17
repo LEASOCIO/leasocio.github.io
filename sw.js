@@ -3,7 +3,7 @@
  * Les appels à l'API GitHub (api.github.com) ne sont JAMAIS mis en cache :
  * ils passent toujours par le réseau (données fraîches + token).
  */
-var CACHE = 'journal-hse-v2';
+var CACHE = 'journal-hse-v3';
 var SHELL = [
   './',
   './index.html',
