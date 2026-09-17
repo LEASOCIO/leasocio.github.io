@@ -194,11 +194,19 @@ function scheduleAutoSave() {
   _saveTimer = setTimeout(function () { _saveTimer = null; pushBacklog(true); }, 1000);
 }
 
+// Ordre d'avancement d'un statut : sert à ne JAMAIS régresser une action lors
+// d'une fusion (une écriture PWA basée sur une copie périmée ne doit pas
+// repasser un « committé/fait » de l'agent en « en cours »).
+var RANG_STATUT = { a_faire: 0, a_valider: 1, en_cours: 2, committe: 3, fait: 4 };
+
 // Fusionne le backlog LOCAL (édité ici) avec le backlog DISTANT (modifié par
-// un autre éditeur ou par l'agent) — par identifiant d'action. Les champs
-// locaux priment (statut / notes édités par l'utilisateur), MAIS les listes de
-// `commits` sont UNIONNÉES (on ne perd pas les commits ajoutés par l'agent),
-// et les actions présentes seulement à distance sont conservées.
+// un autre éditeur ou par l'agent) — par identifiant d'action. Par défaut les
+// champs locaux priment (titre / notes / repo édités par l'utilisateur), MAIS :
+//   • les `commits` sont UNIONNÉS (on ne perd ni ceux de l'agent ni ceux d'ici) ;
+//   • le `statut` retenu est le PLUS AVANCÉ des deux (pas de régression) ;
+//   • si c'est le distant qui est plus avancé (l'agent a terminé l'action), on
+//     reprend aussi SES notes + date_faite (posées en même temps que le statut) ;
+//   • les actions présentes seulement à distance sont conservées.
 function mergeBacklogs(local, remote) {
   var remoteById = {};
   (remote.actions || []).forEach(function (a) { if (a && a.id) remoteById[a.id] = a; });
@@ -208,7 +216,7 @@ function mergeBacklogs(local, remote) {
     seen[la.id] = 1;
     var ra = remoteById[la.id];
     if (!ra) { out.push(la); return; }
-    var merged = Object.assign({}, ra, la); // champs locaux prioritaires
+    var merged = Object.assign({}, ra, la); // champs locaux prioritaires par défaut
     // Union des commits (clé = sha), pour ne perdre ni ceux de l'agent ni ceux d'ici.
     var commits = [], shas = {};
     (la.commits || []).concat(ra.commits || []).forEach(function (c) {
@@ -216,7 +224,19 @@ function mergeBacklogs(local, remote) {
       if (k && !shas[k]) { shas[k] = 1; commits.push(c); }
     });
     merged.commits = commits;
+    // Statut : on garde le plus avancé (jamais de régression).
+    var rl = RANG_STATUT[la.statut] != null ? RANG_STATUT[la.statut] : 0;
+    var rr = RANG_STATUT[ra.statut] != null ? RANG_STATUT[ra.statut] : 0;
     merged.date_faite = la.date_faite || ra.date_faite || '';
+    if (rr > rl) {
+      // Le distant est plus avancé (agent) : on adopte son statut, et ses
+      // notes + date_faite si présentes (posées avec le statut).
+      merged.statut = ra.statut;
+      if (ra.notes != null && ra.notes !== '') merged.notes = ra.notes;
+      if (ra.date_faite) merged.date_faite = ra.date_faite;
+    } else {
+      merged.statut = la.statut;
+    }
     out.push(merged);
   });
   (remote.actions || []).forEach(function (ra) { if (ra && ra.id && !seen[ra.id]) out.push(ra); });
